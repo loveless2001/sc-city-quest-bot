@@ -1,0 +1,18 @@
+{
+  "name": "sc-city-quest-bot",
+  "version": "2.8.0",
+  "description": "Interactive SC City Quest (Hanoi, Guest) runner bot with F8 takeover: trial-427 early-game pilot plus the endgame-v3 controller.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/interactive-play.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "1.64.1",
+    "sharp": "0.35.5"
+  }
+}

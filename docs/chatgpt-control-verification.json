@@ -1,0 +1,15 @@
+{
+  "manualKeys": true,
+  "F8Toggle": true,
+  "rapidStopStart": true,
+  "escapeStop": true,
+  "noQueuedInputAfterStop": true,
+  "puzzleMouseReleased": true,
+  "resultsKeepBrowserOpen": true,
+  "resumeAfterResult": true,
+  "tabSwitchStops": true,
+  "fixtureOnly": true,
+  "unitTestsPassed": 4,
+  "scope": "Normal Chrome window with a local recorded-image test scene; no new live-score benchmark.",
+  "checkedAt": "2026-10-15T17:01:58.086587+00:00"
+}

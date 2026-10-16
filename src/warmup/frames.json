@@ -1,0 +1,95 @@
+{
+ "source": "claude-sc-city-quest/runs/c-064 (batch run, 2026-10-16)",
+ "early": [
+  {
+   "file": "frame-000150.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000151.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000152.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000153.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000154.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000155.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000156.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000157.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000158.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000159.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000160.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000161.jpg",
+   "stage": "Nhập cuộc"
+  },
+  {
+   "file": "frame-000521.jpg",
+   "stage": "Tăng tốc 1"
+  },
+  {
+   "file": "frame-000522.jpg",
+   "stage": "Tăng tốc 1"
+  },
+  {
+   "file": "frame-000523.jpg",
+   "stage": "Tăng tốc 1"
+  },
+  {
+   "file": "frame-000524.jpg",
+   "stage": "Tăng tốc 1"
+  },
+  {
+   "file": "frame-000525.jpg",
+   "stage": "Tăng tốc 1"
+  },
+  {
+   "file": "frame-000526.jpg",
+   "stage": "Tăng tốc 1"
+  }
+ ],
+ "endgame": [
+  {
+   "file": "frame-002247.jpg",
+   "z": 3351.1
+  },
+  {
+   "file": "frame-002502.jpg",
+   "z": 3901.3
+  },
+  {
+   "file": "frame-002777.jpg",
+   "z": 4499.2
+  },
+  {
+   "file": "frame-004020.jpg",
+   "z": 7201.3
+  }
+ ]
+}

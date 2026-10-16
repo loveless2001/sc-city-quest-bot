@@ -1,0 +1,5 @@
+# Dependencies (the launcher runs npm install when missing)
+node_modules/
+# Session logs, captured frames, bench outputs and browser profiles
+work/
+*.log
