@@ -36,6 +36,6 @@ The version guard disabled the bot as designed.
 
 - Moved the version guard to `index-DnBWvl2N.js` in `runs/args-v3.txt`
   (batch bot; backup `args-v3.txt.bak-kcDsL1AL`) and in
-  `interactive/interactive-settings.json`.
+  `interactive/interactive-settings.json` (now `src/interactive-settings.json` in this repo).
 - No controller change is needed.
 - ChatGPT's release folder still expects the old bundle; it was not edited.

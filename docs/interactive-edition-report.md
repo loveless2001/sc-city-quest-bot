@@ -80,7 +80,7 @@ costs one perceive per frame.
 
 ## Live check (approved by the user, 2026-10-16)
 
-Run with `analysis/interactive-live-check.mjs`, which uses a dedicated Chrome
+Run with `analysis/interactive-live-check.mjs` (now `tools/live-check.mjs`), which uses a dedicated Chrome
 window and presses F8 like a player. ChatGPT's batch was idle. Outputs are in
 `runs/i-001` and `runs/i-002`.
 
@@ -189,13 +189,13 @@ unchanged): see `game-update-DnBWvl2N.md`. Version guard updated.
 i-007 died at about 14 s, while the loop was still cold: analysis spiked to
 97 ms and frame gaps to 166–179 ms in the first ~10 s.
 
-`interactive/warmup.mjs` runs a throwaway early-game controller over 18
+`src/warmup.mjs` runs a throwaway early-game controller over 18
 consecutive frames and a throwaway endgame controller over 4 frames (bundled
-in `interactive/warmup/`, from batch run c-064), ×4 rounds. It also does three
+in `src/warmup/`, from batch run c-064), ×4 rounds. It also does three
 page-text reads, all at launch while the menu loads (~1.5 s). `--no-warmup`
 skips it.
 
-Offline benchmark (`analysis/warmup-bench.mjs`): the first 240 opening frames
+Offline benchmark (`analysis/warmup-bench.mjs`, now `tools/warmup-bench.mjs`): the first 240 opening frames
 of live game i-008, fresh process, 3 repetitions each.
 
 | first ~10 s | cold | after warm-up |
@@ -256,7 +256,7 @@ waited for it.
 - `--sequential-text` restores the original read. With `--capture`,
   per-frame timings go to `timing.jsonl`.
 
-**Offline bench** (`analysis/text-overlap-bench.mjs`).
+**Offline bench** (`analysis/text-overlap-bench.mjs`, now `tools/text-read-bench.mjs`).
 
 - **Replay:** a local page replays 600 recorded frames (i-010 or i-008) on a
   canvas, with the HUD text in hidden DOM.
