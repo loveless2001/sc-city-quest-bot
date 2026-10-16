@@ -71,6 +71,26 @@ test('after a puzzle the clock shifts by the page-timed pause',async()=>{
   assert.equal(s.tracking,true);assert.ok(s.ctl.phase-phase0>7900&&s.ctl.phase-phase0<=8050);
 });
 
+test('after a box puzzle the bot resumes from its own continue click and steers at once',async()=>{
+  const page=fakePage(),{s}=session(),at=4_500_000;
+  page.log.stage.push({t:'Bứt phá',at});await s.sync(page);
+  const t=s.phase+timeAtDistance(3290)*1000;s.start(t,0);s.drive(t,0,1,{continuous:true});
+  s.ctl.boxes.set(3315,{votes:[24,0,0],n:24,lane:0});s.ctl.lastPerception={zFrame:3290,px:-2.75,visible:[]};
+  const collect=s.ctl.arrival(3315-1.7),phase0=s.ctl.phase;
+  s.pause(collect+40);page.log.pause.push({type:'pause',at:collect+10});await s.sync(page);
+  // The continue click; the page's resume event has not been read yet.
+  s.lastResumeClick=collect+8000;s.resume();
+  assert.equal(s.paused,false);assert.ok(Math.abs(s.ctl.phase-phase0-8000)<1);
+  assert.ok(s.ctl.boxes.get(3315).collected);assert.equal(s.ctl.wideMarginUntil,3375);assert.ok(s.ctl.verify);
+  assert.ok(s.steerFromModel('Bứt phá').fromModel);
+  // Planned at the (test) time just after the click: the wide margin applies.
+  assert.equal(s.ctl.plan(s.lastResumeClick+20).record.margin,3.5);
+  // A new puzzle screen after the click is seen as one (not as the old one closing).
+  assert.equal(s.puzzleSince(s.lastResumeClick),false);
+  page.log.pause.push({type:'pause',at:s.lastResumeClick+700});await s.sync(page);
+  assert.equal(s.puzzleSince(s.lastResumeClick),true);
+});
+
 test('handing back rebuilds the lane timeline from the lane seen on screen',async()=>{
   const page=fakePage(),gate=new BotControl();gate.availability(true,'Ready');
   const {s,keys}=session(token=>gate.valid(token)),at=5_000_000;

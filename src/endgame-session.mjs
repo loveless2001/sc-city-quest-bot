@@ -104,8 +104,8 @@ const p90=a=>{if(!a.length)return 30;const s=[...a].sort((x,y)=>x-y);return s[Ma
 export class EndgameSession{
   // pressKey(key,token) sends one arrow key and resolves when acknowledged;
   // allowed(token) says whether the bot may still send input under that token.
-  constructor({output,pressKey,allowed,margin=2,lagPrior=25}){
-    Object.assign(this,{output,pressKey,allowed,margin,lagPrior});this.newGame();
+  constructor({output,pressKey,allowed,margin=2,lagPrior=25,boxes='collect'}){
+    Object.assign(this,{output,pressKey,allowed,margin,lagPrior,boxes});this.newGame();
   }
   newGame(){
     this.keys?.clear();this.keys=null;
@@ -149,7 +149,7 @@ export class EndgameSession{
   // when unknown).
   start(now,lane){
     if(this.ctl)return false;
-    const ctl=this.ctl=new EndgameV3({margin:this.margin,lagPrior:this.lagPrior});ctl.phase=this.phase;
+    const ctl=this.ctl=new EndgameV3({margin:this.margin,lagPrior:this.lagPrior,boxes:this.boxes});ctl.phase=this.phase;
     ctl.takeOver(now,lane??1);
     // Bound to this run's controller: a key still in flight when the run ends
     // (and the session resets) updates the old controller, not a missing one.
@@ -167,7 +167,7 @@ export class EndgameSession{
     if(this.mode==='shadow')return;
     this.keys?.clear();if(this.mode)this.handoffs.push({at:now,z:+this.ctl.zAt(now).toFixed(1),to:'player'});this.mode='shadow';
   }
-  pause(now=Date.now()){if(!this.tracking||this.paused)return;this.paused=true;this.pausedAt=now;this.keys.clear();this.ctl.pause();}
+  pause(now=Date.now()){if(!this.tracking||this.paused)return;this.paused=true;this.pausedAt=now;this.keys.clear();this.ctl.pause(now);}
   resume(){
     if(!this.paused)return;this.paused=false;if(!this.tracking)return;
     // This puzzle's page events (the puzzle title appears just before we see it).
@@ -176,7 +176,24 @@ export class EndgameSession{
     else if(this.lastResumeClick)this.ctl.resume(this.lastResumeClick);
     else{this.invalidate('puzzle timing unknown');return;}
     this.clockLog.push({resume:this.ctl.lastPause,events:pl});
+    // A key may have reached the game just before the pause was seen (the game
+    // takes lane keys while paused): check the lane on screen for 0.6 s, as
+    // after a hand-back.
+    this.ctl.verify={until:Date.now()+600,miss:0};
   }
+  // A confirmed mystery box is close (read the page every frame).
+  boxNear(now){return !!this.ctl?.boxNear&&this.tracking&&!this.paused&&this.ctl.boxNear(this.ctl.zAt(now));}
+  // Steer from the lane model without a new frame: right after a puzzle's
+  // continue click, while its window fades out over the game.
+  steerFromModel(stage){
+    const ctl=this.ctl;if(!ctl?.lastPerception||this.paused||!(this.mode==='drive'&&this.allowed(this.driveToken)))return null;
+    const seq=this.keys.seq,plan=ctl.plan(Date.now()),record=plan.record;
+    record.accepted=this.keys.replace(plan.presses,seq);record.inputLatency=this.keys.latency();
+    record.stage=stage;record.captureMs=null;record.plannedAt=Date.now();record.mode='drive';record.fromModel=true;this.records.push(record);
+    return record;
+  }
+  // A new puzzle screen appeared after the given time (page log).
+  puzzleSince(ms){return this.pauseEvents.some(e=>e.type==='pause'&&e.at>ms);}
   // One frame: follow the course; plan and send keys only while driving.
   async step(frame,{captureMs,stage}){
     const ctl=this.ctl,drive=this.mode==='drive'&&this.allowed(this.driveToken);
@@ -207,6 +224,6 @@ export class EndgameSession{
     if(this.saved||(!this.ctl&&!this.clockLog.length))return;this.saved=true;const c=this.ctl;
     await writeFile(resolve(this.output,`endgame-${this.gameStamp}.json`),JSON.stringify({reason,invalid:this.invalid,clockLog:this.clockLog,handoffs:this.handoffs,
       keys:this.keys?.log??[],denseStart:c?.denseStart??null,denseShift:c?.denseShift??null,denseLog:c?.denseLog??[],rebases:c?.rebases??[],
-      laneCorrections:c?.laneCorrections??[],lastPause:c?.lastPause??null,clockFixes:c?.clockFixes??[],lagMs:c?.lagMs??null,lagN:c?.lagN??null,zOffset:c?.zOffset??null,records:this.records},null,0));
+      laneCorrections:c?.laneCorrections??[],lastPause:c?.lastPause??null,clockFixes:c?.clockFixes??[],pauseChecks:c?.pauseChecks??[],lagMs:c?.lagMs??null,lagN:c?.lagN??null,zOffset:c?.zOffset??null,records:this.records},null,0));
   }
 }

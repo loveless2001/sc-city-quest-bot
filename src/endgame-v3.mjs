@@ -76,8 +76,39 @@ function scoreAgainst(p,fenceXs){
 }
 
 // Mystery boxes (5% of the 3300-3780 rows) sit 15 m after their row in a
-// random lane. Collecting one pauses the game for a puzzle, which disturbs the
-// clock, so they are detected and avoided.
+// random lane; collecting one opens a puzzle worth 200 points. The game pauses
+// until the puzzle's continue click, and the clock is shifted by that pause
+// from the page's timestamps (resumeExact). boxes:'collect' (default) plans
+// through confirmed boxes; boxes:'avoid' treats them as obstacles (the old
+// behaviour, from before the exact pause timing).
+// Confirmation: votes in 12 of the last 14 frames. In 30 recorded batch runs real
+// boxes were seen on every frame from ~59 m, while false hits (navy roadside
+// banners at range, the runner close up) came in bursts of at most 10 frames.
+// In a live game (i-012) the box was missed at 55-59 m (a few pixels) and for 2
+// frames behind a fence. The rule confirmed all 19 batch boxes (31.6-36.7 m)
+// and the live one (29.9 m), and none of the false ones (analysis/box-replay.mjs,
+// box-live-votes.mjs).
+// A box is worth 100 to the planner (not its 200 points). Beside a sliding
+// fence a pass costs 400 * (1 - clear/0.6) for clearance under 0.6 m beyond the
+// 0.3 m hard margin, so a box never buys a pass closer than 0.3 + 0.45 = 0.75 m
+// to a slider's predicted edge (its prediction error is at most 0.44 m).
+const BOX_CONFIRM_VOTES=12,BOX_CONFIRM_WINDOW=14,BOX_VALUE=100,BOX_RADIUS=1.0;
+// The puzzle pause clears the queued keys, and steering resumes only after the
+// puzzle closes (0.48 s after the continue click in live game i-018, whose runner
+// then hit the next row's fence, 15 m past the box, in the box lane). So a route
+// that collects a box must keep its lane for 30 m past it (0.6 s at 50 m/s): a
+// box whose next row blocks its lane is not taken.
+const BOX_HOLD_AFTER=30;
+// After a box's puzzle pause, until the lane rows have re-measured the clock.
+const POST_PAUSE_MARGIN=3.5;
+// One frame's votes ([0|1] per lane) for box b; sets b.lane once a lane is
+// confirmed (sticky) and returns it.
+export function confirmBox(b,bits,d=null){
+  b.hist??=[[],[],[]];
+  for(let l=0;l<3;l++){const h=b.hist[l];h.push(bits[l]);if(h.length>BOX_CONFIRM_WINDOW)h.shift();
+    if(b.lane==null&&h.reduce((a,v)=>a+v,0)>=BOX_CONFIRM_VOTES){b.lane=l;b.confirmedAt=d==null?null:+d.toFixed(1);}}
+  return b.lane??null;
+}
 const isBoxBlue=(r,g,b)=>r<70&&b>55&&b<180&&b-r>40&&g>20&&g<140&&b>=g;
 function boxScore(frame,d,px,lane){
   const {data,width,height}=frame,C=data.length/(width*height);
@@ -131,8 +162,8 @@ class Row{
 }
 
 export class EndgameV3{
-  constructor({margin=2,horizon=60,width=120,decisionEvery=2,boundaryBand=3,lagPrior=null}={}){
-    Object.assign(this,{margin,horizon,width,decisionEvery,boundaryBand,lagPrior});
+  constructor({margin=2,horizon=60,width=120,decisionEvery=2,boundaryBand=3,lagPrior=null,boxes='collect'}={}){
+    Object.assign(this,{margin,horizon,width,decisionEvery,boundaryBand,lagPrior,boxMode:boxes});
     this.phase=null;this.active=false;this.state=null;
     this.rows=laneFenceRows().map(z=>new Row(z,'lane',{zFixed:true}));
     // The first sparse row follows the lane rows exactly (3780 + 30 m).
@@ -207,6 +238,9 @@ export class EndgameV3{
     if(lag==null||this.laneResiduals.length<8)return;
     // r = clock distance - content distance = v*lag - e  =>  e = v*lag - r
     const v=speedAt(zNow),r=median(this.laneResiduals),e=v*lag/1000-r;this.lastE={e,r,lag};
+    // First measurement after a box pause: the clock error the lane rows found.
+    if(this.wideMarginUntil!=null)(this.pauseChecks??=[]).push({z:+zNow.toFixed(1),e:+e.toFixed(2),r:+r.toFixed(2),n:this.laneResiduals.length});
+    this.wideMarginUntil=null;      // the clock has been measured since the last pause
     if(Math.abs(e)<0.5&&this.clockFixes.length)return;
     const step=Math.max(-6,Math.min(6,e));
     this.phase-=step/v*1000;this.zOffset-=step;
@@ -229,7 +263,7 @@ export class EndgameV3{
       this.keyHistory.push({key:k,t,d:laneDuration(speedAt(this.zAt(t)))*1000});});
     this.ackLag=(this.ackLag??10)*0.8+0.2*(doneMs.at(-1)-doneMs[0]+3);
   }
-  pause(){this.pausedAt=Date.now();}
+  pause(now=Date.now()){this.pausedAt=now;}
   // Exact pause from page timestamps (challenge screen shown / continue clicked);
   // the pause began when the box was reached (its row + 15 m).
   resumeExact(pauseAt,resumeAt){
@@ -240,7 +274,16 @@ export class EndgameV3{
     this.phase+=shift;if(this.state?.tween)this.state.tween.startMs+=shift;
     for(const k of this.keyHistory)if(k.t>pauseAt)k.t+=0;     // keys are not sent while paused
     this.lastPause={pauseAt,collectMs,resumeAt,shift,boxZ:boxRow?boxRow.z+15:null};
+    this.markCollected(boxRow);
   }
+  // The box that paused the game is gone; do not plan for it again. The clock
+  // shift after a pause can be off by a metre or two (the frame the game saw the
+  // box, the puzzle screen's render): restart the lane-row distance residuals so
+  // that correctClock() measures the new clock from the next 8 of them.
+  // Until then, plan with a wider distance margin (POST_PAUSE_MARGIN, at most
+  // 60 m past the box).
+  markCollected(boxRow){const b=boxRow&&this.boxes.get(boxRow.z+15);if(b)b.collected=true;this.laneResiduals=[];
+    if(boxRow)this.wideMarginUntil=boxRow.z+15+60;}
   // A mystery box (row z + 15 m in the 3300-3780 section) pauses the game until
   // the continue click; shift the clock by that pause.
   resume(resumeMs){
@@ -249,7 +292,8 @@ export class EndgameV3{
     const collectMs=boxRow?this.arrival(boxRow.z+15-1.7):this.pausedAt-60;
     const shift=Math.max(0,resumeMs-Math.min(collectMs,this.pausedAt));
     this.phase+=shift;if(this.state?.tween)this.state.tween.startMs+=shift;
-    this.lastPause={pausedAt:this.pausedAt,collectMs,resumeMs,shift};
+    this.lastPause={pausedAt:this.pausedAt,collectMs,resumeMs,shift,boxZ:boxRow?boxRow.z+15:null};
+    this.markCollected(boxRow);
   }
   bias(){return -0.3;}
 
@@ -437,10 +481,19 @@ export class EndgameV3{
         confident:p.confident,best:p.best.some(b=>Math.abs(b-x)<0.06),sliding,softClear:sliding?0.6:0.3,softCost:sliding?400:150});
       for(const x of p.soft)out.push({z:row.z,x,halfX:NONFENCE_HALF_X,halfZ:0.6+zUnc,cost:NONFENCE_COST,confident:p.confident});
     }
-    for(const [zb,b] of this.boxes){if(zb<zNow-4||zb>zNow+this.horizon+6)continue;
+    if(this.boxMode==='avoid')for(const [zb,b] of this.boxes){if(zb<zNow-4||zb>zNow+this.horizon+6)continue;
       for(let l=0;l<3;l++)if(b.votes[l]>=3&&b.votes[l]>=0.4*b.n)out.push({z:zb,x:LANE_X[l],halfX:1.25,halfZ:1.3,cost:3000,confident:true,box:true});}
     return out;
   }
+  // Confirmed boxes ahead, as planner rewards ({lane, z, value} like coins).
+  boxTargets(zNow){
+    if(this.boxMode!=='collect')return [];
+    return [...this.boxes].filter(([zb,b])=>b.lane!=null&&!b.collected&&zb>zNow-2&&zb<zNow+this.horizon+6)
+      .map(([zb,b])=>({lane:b.lane,z:zb,value:BOX_VALUE,radius:BOX_RADIUS,box:true,holdAfter:BOX_HOLD_AFTER}));
+  }
+  // A confirmed box is close: the page should be read every frame, so that its
+  // puzzle pause is seen at once.
+  boxNear(z){return this.boxMode==='collect'&&[...this.boxes].some(([zb,b])=>b.lane!=null&&!b.collected&&zb>z-5&&zb<z+40);}
   limitZ(){
     const ch=this.chain;if(ch.done)return FORCE_END-3;
     // A detected pending row is planned around; the row after it is at least
@@ -511,9 +564,10 @@ export class EndgameV3{
     if((this.frameCount=(this.frameCount||0)+1)%8===0)this.estimateLag();
     this.correctClock(zRaw);
     for(const row of this.rows){if(row.kind!=='lane')continue;const zb=row.z+15,d=zb-zFrame;if(d<8||d>60)continue;
-      const b=this.boxes.get(zb)??{votes:[0,0,0],n:0};b.n++;
-      for(let l=0;l<3;l++){const v=boxScore(frame,d,px,l);if(v!=null&&v>0.22)b.votes[l]++;}
-      this.boxes.set(zb,b);}
+      const b=this.boxes.get(zb)??{votes:[0,0,0],n:0,lane:null};b.n++;
+      const bits=[0,1,2].map(l=>{const v=boxScore(frame,d,px,l);return v!=null&&v>0.22?1:0;});
+      for(let l=0;l<3;l++)b.votes[l]+=bits[l];
+      confirmBox(b,bits,d);this.boxes.set(zb,b);}
     this.discover(frame,zFrame,px,masks);this.alignDense(frame,zFrame,px,masks);this.resolveDense(frame,zFrame,px,masks);this.refineDense();
     const zNowP=this.zAt(Date.now());
     const det=detectCoins(frame,{z:zFrame,playerX:px,obstacles:this.obstacles(zNowP).filter(o=>o.cost===Infinity).map(o=>({...o,halfX:FENCE_HALF_X}))});
@@ -525,9 +579,10 @@ export class EndgameV3{
     const planMs=nowMs+6,zPlan=this.zAt(planMs);this.zNow=zPlan;
     const obstacles=this.obstacles(zPlan);
     const st=this.stateAt(planMs);
-    const coins=this.coins.coins(zPlan,2).filter(c=>c.z>zPlan);
+    const boxes=this.boxTargets(zPlan),coins=[...this.coins.coins(zPlan,2).filter(c=>c.z>zPlan),...boxes];
     const t0=Date.now();
-    const opts={z:zPlan,target:st.target,tween:st.tween,coins,speedAt,margin:this.margin,horizon:this.horizon,
+    const margin=this.wideMarginUntil!=null&&zPlan<this.wideMarginUntil?Math.max(this.margin,POST_PAUSE_MARGIN):this.margin;
+    const opts={z:zPlan,target:st.target,tween:st.tween,coins,speedAt,margin,horizon:this.horizon,
       decisionEvery:this.decisionEvery,width:this.width,zLimit:this.limitZ()};
     const plan=planWithFallbacks({...opts,obstacles}),dropped=plan.fallback;
     const presses=plan.presses.map(p=>({key:p.key,atMs:this.arrival(p.z),z:p.z}));
@@ -536,7 +591,8 @@ export class EndgameV3{
       px:+px.toFixed(2),pxSrc:this.pxSource,safe:plan.safe,margin:plan.margin,value:Math.round(plan.value),dropped,planMs:Date.now()-t0,
       presses:presses.map(p=>`${p.key}@${p.z.toFixed(1)}`),
       rows:visible.slice(0,4).map(r=>{const p=r.passing();return {z:+r.z.toFixed(1),k:r.kind[0],f:p.fences,b:p.best,s:p.soft,c:p.confident,n:r.frames,...(r.mixed?{mx:1}:{})};}),
-      coins:coins.slice(0,6).map(c=>`${c.lane}@${c.z.toFixed(1)}:${c.value}`),
+      coins:coins.filter(c=>!c.box).slice(0,6).map(c=>`${c.lane}@${c.z.toFixed(1)}:${c.value}`),
+      ...(boxes.length?{boxes:boxes.map(b=>`${b.lane}@${b.z}`)}:{}),
       zOffset:+this.zOffset.toFixed(2),lagMs:this.lagMs,clockFixes:this.clockFixes.length,denseStart:this.denseStart&&+this.denseStart.toFixed(1),denseShift:this.denseShift,
       ...(this.chain.boundary?{boundary:+this.chain.boundary.z.toFixed(1)}:{}),...(this.denseAlt?{denseAlt:+this.denseAlt.start.toFixed(1)}:{})};
     return {presses,record};

@@ -364,6 +364,370 @@ Almost all of the shortfall is in 4,300–7,000 m:
 
 That stretch is the endgame controller, which this change doesn't touch.
 
+### Mystery boxes (2026-10-17, user request)
+
+**Game rules** (public bundle index-DnBWvl2N.js):
+
+- **Reward:** a box ("Hộp bí ẩn", a blue cube with a "?") pauses the game and
+  opens the "THỬ THÁCH BẤT NGỜ" puzzle. Solving it is worth +200
+  (`BONUS_POINTS`).
+- **Collection:** the box floats 1.1–1.9 m up and is collected within 1.2 m of
+  the runner's body.
+- **Early box:** exactly one per run, between 600 and 2,400 m, in a random
+  lane, away from the word races (`Tb()`).
+- **Endgame boxes:** in the late generator's lane-fence rows (3,300–3,780 m,
+  every 30 m), each row has a 5% chance of a box 15 m after it in a random lane
+  (`LANE_FENCE_MYSTERY_RATE`). That's about 0.85 per run, with at least one in
+  roughly 58% of runs.
+- **Input during the pause:** lane keys are gated by "running", not "paused",
+  so the game still takes them.
+
+**Before:**
+
+- **Early box:** the early-game controller already collects it: 63 of 66
+  batch runs, and 8 of 8 interactive games plus the user's 3 games past
+  2,400 m.
+- **Batch misses**, all near fences:
+
+  | run | why it was missed |
+  |---|---|
+  | c-022 | left the box lane at the last moment for a coin |
+  | c-023 | the fence-sequence rule kept a safe lane instead |
+  | c-038 | box never confirmed (5 scattered sightings) |
+
+- **Endgame boxes:** the endgame controller detected them and avoided them
+  (cost 3,000), because the pause used to break its clock.
+
+**Detection check** (`analysis/box-replay.mjs`, 30 batch runs, 3,300–3,800 m):
+
+- Real boxes vote on every frame from about 59 m.
+- False votes come in bursts of at most 10 frames: navy roadside banners at
+  long range in lanes 0 and 2, or the runner close up.
+- The old 3-votes/40% rule passed 2 false ones (in c-064).
+- My first new rule, 12 votes and at least 85% of all frames, confirms all 19
+  real boxes, 32–37 m before each, and none of the false ones.
+- The rule now used is votes in **12 of the last 14 frames**, changed after the
+  live check below. It also confirms all 19 batch boxes (31.6–36.7 m) and none
+  of the false ones.
+
+**Change** (`endgame-v3.mjs`, `endgame-v3-planner.mjs`, `endgame-session.mjs`,
+`interactive-play.mjs`):
+
+- **Collecting:** `boxes:'collect'` (default) turns confirmed boxes into
+  planner rewards: value 100, collection radius 1 m.
+  - Fences stay hard limits. Beside a sliding fence the soft clearance cost
+    (400 × (1 − clear/0.6)) means a box never buys a pass closer than 0.75 m
+    to the fence's predicted edge.
+  - `--endgame-boxes=avoid` restores the old behaviour.
+- **During the pause:**
+  - The page is read every frame within 40 m of a confirmed box, so the pause
+    is seen at once.
+  - The session already clears queued keys on the pause, and resumes with the
+    page's pause and continue timestamps.
+- **After the puzzle:**
+  - The collected box is dropped.
+  - The fence-row distance readings restart, so the clock is re-measured from
+    the next 8 of them.
+  - Until then the planner uses a ±3.5 m margin (normally ±2 m).
+  - A 0.6 s lane check on screen runs, as after a hand-back.
+
+**Evidence:**
+
+- **Tests:** 28/28 pass, 6 new.
+- **Plan replays** (`analysis/box-plan-replay.mjs`, open loop on recorded
+  frames): for all 19 real boxes, the first plan after confirmation goes
+  through the box at fallback level 0, and stays so on every one of the next 6
+  frames.
+- **Closed-loop simulation** (`analysis/v3-sim2.mjs` `boxes=`, paired
+  courses, 3,250–3,900 m):
+  - boxes placed as the game does;
+  - known to the controller from 34 m, with 75% detection;
+  - collected within the game's 1.2 m;
+  - on a pause: queued keys dropped, and a clock error until the fence rows
+    re-measure it.
+
+| scenario | runs | deaths | boxes collected | points in the stretch |
+|---|---|---|---|---|
+| real rate, no box logic | 1,000 | 3 | 328/769 (by accident) | 1,592 |
+| real rate, avoid (old) | 1,000 | 3 (same 3) | 67/769 | 1,532 |
+| real rate, collect | 1,000 | 3 (same 3) | 657/769 (85%) | 1,651 |
+| 30% rate, collect | 600 | 2 (same as without boxes) | 2,617/3,092 | |
+| 30% rate, ±3 m resume error, no wide margin | 600 | 27 | 2,560 | |
+| 30% rate, ±3 m resume error, wide margin | 600 | 6 | 2,601 | |
+| 30% rate, ±4 m resume error, wide margin | 600 | 19 | 2,587 | |
+| full course, real rate: none vs collect | 150 + 150 | 28 and 28, all at 7,028–7,466 m (same runs) | | 27,526 vs 27,633 |
+
+Notes on the table:
+
+- **Default resume error:** ±1.5 m, re-measured 25 m later. Estimated from
+  the 1.7 m collection-point assumption, the game's frame step and the
+  puzzle screen's render.
+- **Pessimistic rows:** re-measured only 40 m later.
+- **Expected gain:** against the old avoid behaviour, about +120 points per
+  run.
+- **Larger clock errors:** if the real error after a puzzle were 2–3× the
+  estimate, each collected box would add a ~0.15–0.7% death risk. That's still
+  positive in expectation, but it's the thing to measure live.
+- **Measuring it live:** the session log's `clockFixes` entry after a box
+  pause records the error the fence rows found.
+
+**Not changed:** the batch bot (`bot-v2`) still avoids endgame boxes. Its loop
+has no every-frame page read near boxes and no post-resume lane check.
+`bot-next` has the new controller files.
+
+**Live check** (approved by the user; batch idle; 2026-10-16 18:06–18:19,
+Chrome, bot on throughout):
+
+| game | result | early box | endgame boxes |
+|---|---|---|---|
+| i-013 | **29,100**, full course (7,893 m) | collected, puzzle solved | none on screen |
+| i-014 | **29,680**, ended at ~7,445 m by a focus loss (see below) | collected, puzzle solved | none on screen |
+| i-015 | **30,060**, full course (7,917 m) | collected, puzzle solved | none on screen |
+
+- **No endgame box in any of the three games** (about a 7% chance). So
+  collecting one, and the clock error after its puzzle, are still untested
+  live.
+- **How "none" was checked:** the controller's own box test was recomputed on
+  every captured frame in 3,300–3,800 m (`analysis/box-live-votes.mjs`). No
+  position reached more than 10 votes, the false-hit level.
+- **i-014:**
+  - The bot was turned off ("You control the game") 50 ms before the result
+    screen.
+  - The runner was still moving on the bot's keys about 0.5 s before the end,
+    whereas a fatal hit ends a run only 1 s later.
+  - This is the same pattern as i-011, where the user's click took focus.
+    Something took window focus at 18:14:37; the source is unknown.
+- **Slow PC:** frame decoding was about 1.7× slower than in earlier games
+  (13–19 ms against 8–9 ms) in i-013 and part of i-014, so the PC was under
+  other load.
+- **Detection fix found by this check:**
+  - The same recomputation on an earlier live game (i-012, old controller)
+    found a real endgame box (3,465 m, lane 0) that the old controller avoided.
+  - On live frames it was missed at 55–59 m (a few pixels) and for 2 frames
+    behind a fence: 19 of 25 votes. My first rule (≥85% of all frames) would
+    never have confirmed it.
+  - The rule is now 12 of the last 14 frames, which confirms it at 29.9 m.
+    The 19 batch boxes are still confirmed, with no false ones; a test was
+    added.
+
+**Second live series** (approved; batch idle; up to 4 games, stopping at the
+first endgame box):
+
+| game | result | endgame box |
+|---|---|---|
+| i-016 | **31,570**, full course | none (8 votes at most) |
+| i-017 | ended at 44 s (~1,480 points) by a focus loss | – |
+| i-018 | **9,870**, crashed at ~3,330 m | collected at 3,315 m, then crash |
+
+- **i-017:** same pattern as i-011 and i-014: the bot was turned off 49 ms
+  before the result screen. A foreground-window logger started after i-017
+  saw no other window take focus during i-018. The Claude app came to the
+  front only after the browser closed. The 15-minute focus thefts (18:14:37,
+  18:30:04) remain unexplained.
+- **i-018 collected a box and then crashed:**
+  - Box in lane 0 at 3,315 m, confirmed 34.2 m ahead (22 of 24 frames).
+  - Puzzle solved. The page's pause came 12 ms before the predicted collection
+    time, so the clock shift was accurate.
+  - The plan had a double lane change 1.6 m past the box, because the next
+    row's sliding fence (3,330 m, 15 m on, about 0.3 s) was in lane 0.
+  - The puzzle pause cleared that key, as designed.
+  - After the continue click the loop took **0.48 s** to steer again: the
+    puzzle window fades out with its text still on the page, so the loop
+    still saw a puzzle.
+  - The game was already running, so the runner hit the 3,330 m fence.
+  - This is the first live death from the box change.
+- **The simulator had missed it:** it gave control back on the next frame.
+  With a resume delay added (`resumelag=`):
+
+| scenario (paired courses) | runs | deaths | boxes collected |
+|---|---|---|---|
+| 5% rate, 0.5 s delay, no hold | 1,000 | 195 | |
+| 5% rate, 0.5 s delay, 30 m hold | 1,000 | 28 | 389/769 |
+| 5% rate, 0.15 s delay, 30 m hold | 1,000 | 3 (baseline) | 403/769 |
+| 30% rate, 0.5 s delay, no hold | 600 | 475 | |
+| 30% rate, 0.5 s delay, 30 m hold | 600 | 116 | |
+
+**Fixes:**
+
+1. **Planner hold** (`holdAfter`, `BOX_HOLD_AFTER=30`): a route that collects
+   a box presses no key for 30 m past it, plus the coin margin.
+   - A box whose next row blocks its lane is not taken. That's about half the
+     boxes; in the simulator 52% were collected instead of 85%.
+   - The beam keeps held and free routes apart.
+   - Regression test with the i-018 layout.
+2. **Fast resume** (`interactive-play.mjs`, `steerFromModel`):
+   - Right after the bot's continue click, the clock resumes from the click
+     time and the controller plans from its lane model and sends keys at once.
+   - While the puzzle window fades out (its text still on the page, up to
+     1.5 s, unless a new puzzle screen appears in the page log), it keeps
+     steering from the model without analysing frames.
+   - Test added.
+3. The controller's pause now uses the session's pause time.
+
+More runs with the resume delay (5% box rate, 1,000 paired runs each):
+
+| mode | resume delay | deaths | boxes collected | points in the stretch |
+|---|---|---|---|---|
+| avoid (old) | 0.15 s | 3 | 67 (by accident) | 1,531 |
+| collect, 30 m hold | 0.15 s | 3 | 403 | **1,600** |
+| collect, 30 m hold, ±3 m clock error | 0.15 s | 3 | 402 | 1,599 |
+| collect, 50 m hold | 0.15 s | 3 | 326 | 1,585 |
+| avoid (old) | 0.5 s | **28** | 66 | 1,514 |
+| collect, 30 m hold | 0.3 s | 28 (the same 28 runs) | 390 | 1,580 |
+| collect, 50 m hold | 0.5 s | 28 (the same 28 runs) | 318 | 1,565 |
+| collect, 65 m hold | 0.8 s | 30 | 316 | 1,561 |
+
+At the 30% stress rate with a 0.15 s delay and the 30 m hold: 3 deaths in 600
+runs (baseline 2), 1,528/3,092 boxes collected.
+
+What this shows:
+
+- **With the hold, deliberate collection adds no deaths over the old avoid
+  behaviour, at any delay.** Avoid at 0.5 s dies in exactly the same 28 runs
+  as collect.
+- **Those 28 deaths come from a box hit by accident.** The simulator lets the
+  controller see only 75% of boxes; one passed through unseen pauses the game,
+  and a slow resume then misses the next row. This risk exists in either mode.
+- **A longer hold doesn't help,** it only takes fewer boxes. So it stays at
+  30 m.
+- **The fast resume protects against both kinds of box hit.** With a 0.15 s
+  delay every mode is at the baseline. Live, the fast resume should give
+  control back within a few tens of milliseconds of the click.
+- **Expected gain:** about +70 points per run over the old avoid behaviour.
+
+The hold fixes the deliberate case; the fast resume is needed for any box
+hit.
+
+**Third live series, with both fixes** (approved; batch idle; stopping once a
+box was collected and survived; foreground-window logger running):
+
+| game | result | endgame box |
+|---|---|---|
+| i-019 | **31,730**, full course (7,926 m) | none (5 votes at most) |
+| i-020 | **30,390**, full course (7,962 m) | collected at 3,555 m, survived |
+
+i-020 in detail:
+
+- **Box:** lane 1 at 3,555 m, confirmed 33.3 m ahead. Collected, and its
+  puzzle solved (+200, in addition to the early box's +200).
+- **Pause:** 2.2 s, clock shift 2.30 s. The bot saw the pause 69 ms after the
+  predicted collection time.
+- **Resume:**
+  - first steering from the lane model 2 ms after the bot's continue click
+    (i-018: 505 ms to the first key);
+  - first analysed frame 434 ms after the click, once the puzzle window had
+    faded;
+  - first key needed 486 ms after the click: the plan kept the box lane, as the
+    hold requires.
+- **Clock after the puzzle:** the first lane-row measurement, 36 m past the box
+  (8 residuals), found a 2.63 m error and fixed it. That's more than the
+  ±1.5 m estimate, but inside the ±3.5 m post-pause margin, which shows the
+  wide margin is needed.
+- **Planning:** fallback level 0 on every frame from 35 m before the box to
+  60 m after it. Margin 3.5 m until the clock fix, then 2 m. No lane
+  corrections.
+- **Focus:** the logger saw only the Claude app coming to the front after each
+  browser closed. No focus theft during either game.
+
+New log fields: `pauseChecks` (the first clock measurement after a box pause)
+and `plannedAt` on model-steered records. `analysis/box-live.mjs` reports
+them.
+
+### Early-game jumps (2026-10-17, user request)
+
+The user reported that the bot "jumps too often and misses some points", and
+asked for a jump only when a cone is unavoidable.
+
+**Game rules** (index-DnBWvl2N.js):
+
+- **The jump:** 1.5 m high, 200 ms up and 250 ms down. The body box (feet to
+  1.8 m above them) rises with it.
+- **What a jump clears:** only cones ("Cọc tiêu", −30, `canJumpOver`).
+  Barriers (−60) and fences collide whatever the height.
+- **Coins:** float at 0.8–1.2 m and are collected within 0.5 m of the body
+  box. So in the middle ~160 ms of a jump, coins bobbing below 1.0 m are
+  missed.
+- **Letters** (1.05–1.35 m, radius 0.7) and boxes (radius 1.2) are never
+  missed by a jump.
+
+**Trial 427's jumping:**
+
+- None of the jump-mode flags was set, so the default rule applied: jump
+  whenever 1 s has passed since the last jump and nothing is due in the
+  target lane within 350 ms.
+- The crossing pilot also turns on late-stage jumps: every 70 ms while on the
+  ground in "Bứt phá" (2,600–2,806 m).
+
+**Measured** in 30 batch runs (c-037..c-066; same controller flags as the
+interactive edition), per run:
+
+| | count |
+|---|---|
+| jumps | 94 |
+| with a cone due in the runner's lanes | 3.0 |
+| with a barrier due (can't be jumped) | 2.8 |
+| with nothing ahead | 88 |
+| expected coin points lost in the air | ~88 |
+
+- **Early-game score:** median 5,630 at takeover.
+- **Cones that reached the committed lane within 280 ms:** 1.2 per run, 37 in
+  total. Only 6 got a jump, because the default rule blocks jumping when
+  something is due within 350 ms.
+- **Penalties:** about 0.6 per run, mostly single −30s.
+
+**Change:**
+
+- Settings add `--hazard-only-early-jumps`, the pilot's existing mode: jump
+  only for a tracked low obstacle still in the committed lane within 280 ms,
+  with the runner on the ground.
+- Settings also add `--jump-cones-only`, which is new: only cones count, and
+  the crossing pilot's late-stage jumps are turned off.
+- Per-frame `timing.jsonl` records now mark jump keys (`jump:1`).
+
+**Offline check** (`analysis/jump-policy-replay.mjs`): the jump decision is
+recomputed on every recorded frame, with the same perception and lane plan.
+
+| policy | jumps per run | cones jumped (of 37) | coin points lost in the air |
+|---|---|---|---|
+| recorded (trial 427) | 93.8 | 6 | 87.8 |
+| cone-only | 0.8 | 23 | 1.3 |
+
+- **The 14 cones the replay didn't jump:** in every one the recorded runner
+  was already in the air from an old random jump, which won't happen under
+  the new rule.
+- **Real-loop replay** (headless, i-012's frames): no errors, puzzle and
+  result handled, 24 keys sent against about 60 before.
+- **Tests:** 32/32.
+- **Expected effect:** about +85 points per run in the early game from coins
+  no longer missed, and fewer cone hits. The "lucky" clears of untracked cones
+  by random jumps are worth only a few points per run.
+
+**Live check** (approved; batch idle; Chrome, bot on throughout). Per-frame
+`timing.jsonl` now also logs the HUD score and penalty popups (`score`,
+`pen`); `analysis/jump-live.mjs` reports them.
+
+| game | final | jumps (early game) | penalties | score at the 2,806 m takeover |
+|---|---|---|---|---|
+| i-024 | **35,890**, full course (the highest yet) | 3 | one −30 cone | 5,640 |
+| i-025 | **32,190**, full course | 3 | none | 6,120 |
+
+For comparison, under the old jumping: about 94 jumps per run; score at the
+takeover was a median 5,630 in batch, and 4,930–5,960 in the interactive games
+i-001, i-008, i-010 and i-012. Two games are not a measurement of the coin
+gain, but the jumping is gone.
+
+**i-024's cone hit:**
+
+- The early mystery box was in the left lane and a row of three cones in the
+  middle lane; the runner came from the right.
+- The controller crossed the cone lane to take the box (+200 for −30).
+- The jump rule checks only the start and end lanes, not a lane crossed on the
+  way.
+- In the 30 batch runs, a cone in a crossed middle lane near a double lane
+  change came up about 4.8 times per run (a loose count). Actual cone hits
+  were about 0.4 per run, so extending the rule to crossed lanes would be
+  worth at most about 15 points per run. Not done.
+
 ## Still to verify
 
 Hand-back after a real player has steered in the obstacle sections. In the

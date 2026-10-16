@@ -59,6 +59,50 @@ The F8 shortcut works only while the game page has keyboard focus.
   endgame controller then stays off for that run, and F8 uses the early-game
   controller.
 
+## Jumps
+
+The early-game controller jumps only for a cone it can't steer around: a
+tracked cone (−30 if hit) still in the lane it is committed to, less than
+280 ms away. It never jumps for barriers, which the game doesn't let you jump.
+
+Trial 427 used to jump about once a second, and every 70 ms in the late
+"Bứt phá" stage, whether or not anything was ahead: about 94 jumps per run.
+That made the runner miss coins below it, about 88 points per run, while
+almost never jumping for an actual cone (6 of 37 in 30 recorded runs).
+
+Remove `--hazard-only-early-jumps` and `--jump-cones-only` from
+`src/interactive-settings.json` to restore the old jumping. The endgame
+controller never jumps.
+
+## Mystery boxes (+200)
+
+The blue "?" boxes open a puzzle worth 200 points. The bot solves the puzzle
+itself.
+
+- **Early box:** one per run, between 600 and 2,400 m, in a random lane. The
+  early-game controller goes for it. It was collected in 63 of 66 batch runs
+  and in every interactive game that got past 2,400 m.
+- **Endgame boxes:** in 3,300–3,800 m (single sliding fences every 30 m), each
+  fence row has a 5% chance of a box 15 m after it. That's about 0.8 boxes per
+  run, with at least one in more than half of runs. The endgame controller
+  used to avoid these on purpose, because the puzzle pause broke its distance
+  clock. It now collects them:
+  - **Confirming a box:** a box counts once it has been seen on 12 of the last
+    14 frames, about 30–35 m before it. In 30 recorded batch runs and one live
+    game this rule confirmed all 20 real boxes and none of the false hits.
+  - **Safety first:** fences stay hard limits. A box is never worth a pass
+    closer than 0.75 m to a sliding fence's predicted edge. A box is taken only
+    if the bot can then keep its lane for 30 m, so a box whose next fence row
+    (15 m later) blocks its lane is skipped. That's about half of them.
+  - **During the pause:** the page is read every frame near a box, so the
+    pause is seen at once.
+  - **After the puzzle:** right after its continue click, the bot resumes the
+    clock and steers from its lane model. It doesn't wait for the puzzle window
+    to fade out; in live game i-018 that wait took 0.48 s and cost the run. It
+    then plans with a wider ±3.5 m distance margin and checks its lane on
+    screen, until the fence rows have re-measured the clock.
+  - `--endgame-boxes=avoid` restores the old behaviour.
+
 ## Options
 
 Pass options to the launcher or after `npm start --`:
@@ -71,6 +115,7 @@ Pass options to the launcher or after `npm start --`:
 | `--capture` | save every analysed frame and per-frame timings (`timing.jsonl`) |
 | `--no-warmup` | skip the 1.5 s launch warm-up |
 | `--sequential-text` | use the original early-game page-text read |
+| `--endgame-boxes=avoid` | steer around endgame mystery boxes instead of collecting them |
 
 - **Endgame controller off:** remove `--endgame-v3` from
   `src/interactive-settings.json`.

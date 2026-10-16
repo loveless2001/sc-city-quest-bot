@@ -55,8 +55,11 @@
     "--public-word-clock",
     "--current-game-rewards",
     "--expected-bundle=index-DnBWvl2N.js",
+    "--hazard-only-early-jumps",
+    "--jump-cones-only",
     "--endgame-v3",
     "--late-frame-ms=40"
   ],
-  "endgame": "claude-sc-city-quest endgame-v3 (live c-037..c-066, 30/30 survived); boundary fix 2026-10-16"
+  "endgame": "claude-sc-city-quest endgame-v3 (live c-037..c-066, 30/30 survived); boundary fix 2026-10-16",
+  "jumps": "Early-game jumps only for a tracked cone the route cannot avoid (--hazard-only-early-jumps --jump-cones-only), 2026-10-17; trial 427 jumped about once a second."
 }

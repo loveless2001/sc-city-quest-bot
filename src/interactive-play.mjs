@@ -18,6 +18,10 @@ const require=createRequire(process.env.SC_BOT_DEPENDENCIES?resolve(process.env.
 const {chromium}=require('playwright'),sharp=require('sharp');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const stageFrom=text=>text.match(/Hanoi\s+(Nhập cuộc|Tăng tốc\s*\d|Về đích|Bứt phá)/)?.[1]||'';
+// For the per-frame timing log: the HUD score, and a penalty popup ("-30" cone,
+// "-60" barrier) if the page shows one.
+const hudScore=text=>Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',',''))||undefined;
+const penaltyShown=text=>Number(text.match(/(?:^|\n)\s*-(30|60)\s*(?:\n|$)/)?.[1])||undefined;
 
 export async function runInteractive({context,page,argv,output,url='https://sccityquest.zenimpact.vn/'}={}){
   await mkdir(output,{recursive:true});
@@ -35,7 +39,9 @@ export async function runInteractive({context,page,argv,output,url='https://scci
   // From 2806 m the endgame controller follows the course on every frame, with
   // the bot on or off, and steers only while the bot is on (--endgame-v3).
   const endgame=flags.has('--endgame-v3')?new EndgameSession({output,pressKey:(k,token)=>key(k,token),allowed:token=>live(token),
-    margin:Number(argv.find(a=>a.startsWith('--endgame-margin='))?.split('=')[1])||2}):null;
+    margin:Number(argv.find(a=>a.startsWith('--endgame-margin='))?.split('=')[1])||2,
+    // Mystery boxes in 3300-3800 m: collect (default) or avoid (--endgame-boxes=avoid).
+    boxes:argv.find(a=>a.startsWith('--endgame-boxes='))?.split('=')[1]||'collect'}):null;
   if(endgame)await instrumentEndgame(page);
   const release=async()=>{
     const keys=[...held];held.clear();
@@ -180,14 +186,16 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     if(v.length)out[k]=[v[v.length>>1],v[Math.floor(v.length*.9)],v.at(-1)].map(x=>Math.round(x));}
     const stale=timing.filter(t=>t.stale).length;if(stale)out.stale=stale;timing=[];return out;};
   // One endgame frame, with the bot on (steering) or off (following only).
-  let endgameText=null,endgameFrames=0,endgamePuzzle=false,hudMissingSince=null;
+  let endgameText=null,endgameFrames=0,endgamePuzzle=false,hudMissingSince=null,puzzleClosingUntil=0;
   async function endgameStep(tick){
     const enabled=control.enabled,token=control.generation;
     // Page text (result, puzzle, stage) and the endgame event log are read in
     // one round trip every fifth frame (each waits for the game's main thread);
-    // the frame analysis itself does not need them.
+    // the frame analysis itself does not need them. Near a mystery box the
+    // bot may collect, every frame, so that its puzzle pause is seen at once.
     let probeMs=0;
-    if(!endgameText||endgamePuzzle||endgameFrames%5===0){
+    const closing=Date.now()<puzzleClosingUntil;
+    if(!endgameText||endgamePuzzle||closing||endgameFrames%5===0||endgame.boxNear(tick)){
       const t0=Date.now(),read=await page.evaluate(()=>{const l=window.__endgameLog;
         return {text:document.body.innerText,log:l?{stage:l.stage.splice(0),pause:l.pause.splice(0),hidden:l.hidden.splice(0)}:null};}).catch(()=>null);
       probeMs=Date.now()-t0;
@@ -195,14 +203,30 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       else{endgameText=read.text;await endgame.ingest(read.log);}
     }
     const text=endgameText;endgameFrames++;
-    const leave=async reason=>{await endgame.save(reason);endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;};
+    const leave=async reason=>{await endgame.save(reason);endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;puzzleClosingUntil=0;};
     if(text.includes('NEXT QUEST')){
       await recordResult(text);await leave('result');
       if(enabled)control.setEnabled(false,'Run ended · start a new game');return;
     }
-    if(/GHÉP HÌNH|THỬ THÁCH BẤT NGỜ/.test(text)){
-      endgamePuzzle=true;endgame.pause();
+    const puzzleText=/GHÉP HÌNH|THỬ THÁCH BẤT NGỜ/.test(text);
+    // After the continue click the puzzle window fades out for a few hundred ms
+    // with its text still on the page, while the game already runs (live game
+    // i-018 went 0.48 s without steering and hit the fence 15 m past the box).
+    // Unless a new puzzle screen has appeared since, steer from the lane model.
+    if(puzzleText&&closing&&!endgame.puzzleSince(endgame.lastResumeClick)){
+      endgame.steerFromModel(FINAL_STAGE);await sleep(15);return;
+    }
+    if(puzzleText){
+      endgamePuzzle=true;puzzleClosingUntil=0;endgame.pause();
+      const clicked=endgame.lastResumeClick;
       if(enabled){await release();if(live(token))await puzzleStep(token);}
+      if(endgame.lastResumeClick!==clicked&&endgame.tracking){
+        // Continue clicked: the game runs again. Resume the clock (from the click
+        // time; the page's own resume event is read later) and steer at once.
+        endgamePuzzle=false;puzzleClosingUntil=Date.now()+1500;endgame.resume();
+        if(endgame.tracking)endgame.steerFromModel(FINAL_STAGE);
+        return;
+      }
       await sleep(70);return;
     }
     if(endgamePuzzle){endgamePuzzle=false;await endgame.sync(page);endgame.resume();if(!endgame.tracking)return;}
@@ -339,7 +363,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
         commitRoute(queue,groups,state,controlled,flags.has('--guard-plan-state'));
         frames++;
         if(flags.has('--capture'))await saveFrame(image.shot);
-        timing.push({f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,
+        timing.push({f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,jump:decision.keys?.includes('ArrowUp')?1:undefined,score:hudScore(text),pen:penaltyShown(text),
           wait:image.waitMs,decode:image.decodeMs,analyse:analysisMs,age:now-image.captureStart});lastTick=tick;
         if(Date.now()-lastReport>5000){
           lastReport=Date.now();const progress={frames,score:Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',','')),stage,analysisMs,enabled:control.enabled,timing:timingSummary()};

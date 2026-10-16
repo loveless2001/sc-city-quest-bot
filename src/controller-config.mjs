@@ -22,6 +22,10 @@ export async function createConfiguredPilot(argv){
   if(args.has('--separate-close-fences'))pilot.separateCloseFences=true;
   if(args.has('--all-feedback-jumps'))pilot.feedbackJump=true;
   if(args.has('--hazard-only-early-jumps'))pilot.hazardOnlyEarlyJumps=true;
+  // Jump only for a tracked cone the route cannot avoid, in every stage: barriers
+  // ('rail') cannot be jumped in the game, and the crossing pilot's own late-stage
+  // jumps (every 170 ms in Bứt phá) are turned off.
+  if(args.has('--jump-cones-only')){pilot.jumpConesOnly=true;pilot.lateFeedbackJump=false;pilot.feedbackJump=false;}
   if(args.has('--phase-aligned-jumps'))pilot.phaseAlignedJumps=true;
   if(args.has('--early-rails'))pilot.earlyRails=true;
   if(args.has('--late-safe-detours'))pilot.lateSafeDetourMs=350;

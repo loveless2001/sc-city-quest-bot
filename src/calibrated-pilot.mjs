@@ -224,7 +224,7 @@ export class CalibratedPilot extends TrackedPilot {
       }else reason=ownThreat?'wait for a physically reachable gap':'keep safe lane throughout fence sequence';
     }
     if(commands.length){this.commandLane=end;this.lane=end;this.lastMove=now+commands.at(-1).atMs;}
-    const earlyThreat=this.hazardOnlyEarlyJumps?earlyJumpThreat(softObstacles,{current,end,commands}):null;
+    const earlyThreat=this.hazardOnlyEarlyJumps?earlyJumpThreat(this.jumpConesOnly?softObstacles.filter(o=>o.kind==='cones'):softObstacles,{current,end,commands}):null;
     const wantJump=(this.feedbackJump||(this.lateFeedbackJump&&/B\u1ee9t ph\u00e1/.test(this.stageText)))?
       d.player?.y>frame.height*.575&&now-this.lastAutoJump>(this.jumpRetryMs??170):
       this.hazardOnlyEarlyJumps?Boolean(earlyThreat)&&d.player?.y>frame.height*.575&&now-this.lastAutoJump>120:

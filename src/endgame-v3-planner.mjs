@@ -32,7 +32,9 @@ const ACTIONS=[[],['L'],['R'],['L','L'],['R','R']];
 /**
  * plan({z,target,tween,obstacles,coins,speedAt,margin,horizon,decisionEvery,width})
  * obstacles: [{z, x, halfX, halfZ, cost}] cost Infinity = fatal, else penalty points.
- * coins: [{lane, z, value}]
+ * coins: [{lane, z, value, radius?, box?, holdAfter?}] (radius: collection radius,
+ * default a coin's; box: a mystery box, see endgame-v3.mjs; holdAfter: a route
+ * that collects it presses no key until holdAfter m past it, plus the coin margin)
  */
 export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horizon=60,dt=1/60,
   decisionEvery=2,width=140,zLimit=Infinity,allowInterrupt=false,coinMargin=null}){
@@ -46,8 +48,8 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
   // route closer to a slider.
   const sliding=obs.some(o=>o.sliding&&o.cost===Infinity);
   const cm=coinMargin??(sliding?margin:COIN_MARGIN??margin),coinMargins=cm?[-cm,0,cm]:[0];
-  const coinList=coins.filter(c=>c.z>z-3&&c.z<zEnd+2&&!(DROP_BLOCKED_COINS&&obs.some(o=>!o.sliding&&!o.box&&o.best!==false&&Math.abs(o.x-LANES[c.lane])<1.4&&Math.abs(o.z-c.z)<17)));
-  let beam=[{target,tween:tween&&{...tween},z,frame:0,presses:[],taken:new Map(),value:0,hits:new Set()}];
+  const coinList=coins.filter(c=>c.z>z-3&&c.z<zEnd+2&&!(DROP_BLOCKED_COINS&&!c.box&&obs.some(o=>!o.sliding&&!o.box&&o.best!==false&&Math.abs(o.x-LANES[c.lane])<1.4&&Math.abs(o.z-c.z)<17)));
+  let beam=[{target,tween:tween&&{...tween},z,frame:0,presses:[],taken:new Map(),value:0,hits:new Set(),hold:-Infinity}];
   while(beam[0].z<zEnd){
     const next=[];
     for(const st of beam){
@@ -57,8 +59,9 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
         // whole following path) unless no other route exists; a double press is
         // one atomic action.
         if(a.length&&st.tween&&!allowInterrupt)continue;
+        if(a.length&&st.hold>st.z)continue;
         if(a.length===2&&((a[0]==='L'&&st.target!==0)||(a[0]==='R'&&st.target!==2)))continue;
-        const n={target:st.target,tween:st.tween&&{...st.tween},z:st.z,frame:st.frame+1,presses:st.presses,taken:st.taken,value:st.value,hits:st.hits};
+        const n={target:st.target,tween:st.tween&&{...st.tween},z:st.z,frame:st.frame+1,presses:st.presses,taken:st.taken,value:st.value,hits:st.hits,hold:st.hold};
         const speed=speedAt(n.z);
         let ok=true;for(const k of a)if(!press(n,k,speed)){ok=false;break;}
         if(!ok)continue;
@@ -83,14 +86,15 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
         }
         if(dead)continue;
         for(const c of coinList){
-          const cx=LANES[c.lane],px=Math.min(Math.max(cx,bx0),bx1);if(Math.abs(cx-px)>=COIN_RADIUS)continue;
-          const lim=Math.sqrt(COIN_RADIUS**2-(cx-px)**2)+hd;
+          const cr=c.radius??COIN_RADIUS,cx=LANES[c.lane],px=Math.min(Math.max(cx,bx0),bx1);if(Math.abs(cx-px)>=cr)continue;
+          const lim=Math.sqrt(cr**2-(cx-px)**2)+hd;
           let mask=n.taken.get(c)||0,changed=false;
           coinMargins.forEach((m,i)=>{if(!(mask&(1<<i))&&Math.abs(n.z+m-c.z)<lim){mask|=1<<i;changed=true;}});
           if(changed){if(n.taken===st.taken)n.taken=new Map(st.taken);
             const bits=v=>{let k=0;for(let i=0;i<coinMargins.length;i++)if(v&(1<<i))k++;return k;};
             const before=n.taken.get(c)||0;n.taken.set(c,mask);
-            n.value+=c.value*(bits(mask)-bits(before))/coinMargins.length;}
+            n.value+=c.value*(bits(mask)-bits(before))/coinMargins.length;
+            if(c.holdAfter)n.hold=Math.max(n.hold,c.z+c.holdAfter+cm);}
         }
         n.score=n.value-n.presses.length*0.5;
         next.push(n);
@@ -99,7 +103,7 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
     if(!next.length)return {presses:[],value:-Infinity,safe:false};
     const best=new Map();
     for(const s of next){
-      const key=`${s.target}|${s.tween?Math.round(s.tween.from*4)+':'+Math.round(s.tween.t/s.tween.d*6):'-'}`;
+      const key=`${s.target}|${s.tween?Math.round(s.tween.from*4)+':'+Math.round(s.tween.t/s.tween.d*6):'-'}${s.hold>s.z?'|hold':''}`;
       const b=best.get(key);if(!b||s.score>b.score)best.set(key,s);}
     beam=[...best.values()].sort((a,b)=>b.score-a.score).slice(0,width);
   }
