@@ -346,9 +346,52 @@ no points left to speak of. This is the first live crash there in 34 games
    in a lane the fence physically missed.
 4. One plan later, the last-resort level reversed that move mid-crossing.
 
-**To fix, in a separate change:**
-- close to a row, prefer the measured width before a zero-margin crossing;
-- never reverse a crossing in progress at the last-resort level.
+**Reproduction.** From the records at 8,173.1 m:
+- the row 6 m ahead had the slider predicted at x = −0.6 and a cone or
+  barrier in lane 2; the runner was in lane 0;
+- with the slider at −0.5 or −0.55 the planner stays in lane 0;
+- at −0.6 or −0.65, lane 0 fails the 0.3 m hard margin. The old fallback
+  order then rates the double lane change across the slider's path (L, L at
+  once, into the cone) as safe at a 0.9 m distance margin.
+
+The game handles a second lane key during a lane change exactly as the
+planner models it: a new full-length move from the current position. So the
+crossing itself would probably have cleared. The reversal one plan later is
+what put the runner into the fence. That last-resort plan could not be
+rebuilt exactly from the records.
+
+**Fix** (`planWithFallbacks`, `FALLBACKS` in `src/endgame-v3-planner.mjs`):
+
+- **Order "thin-first":** after the full width at the full ±2 m margin fails,
+  the planner tries the measured slider width (+0.05 m) at margins 2, 1.4
+  and 0.9 m, and only then the full width at reduced margins. In the i-028
+  case it stays in lane 0 at the full margin: the slider misses it by 0.29 m,
+  and it moves left after the row.
+- **Forward first:** at every level that may interrupt a lane change, only
+  keys that carry the change on in its direction are tried first. Reversals
+  come only when nothing else works.
+- **Tests:** the i-028 case, with the slider at −0.5, −0.6 and −0.65, must
+  not cross; a lane change in progress is carried on before it is reversed.
+  `npm test`: 47 pass.
+
+**Simulation** (v3-sim3, 150 paired full-course runs per line, old vs new
+fallbacks):
+
+| scenario | new course | old course |
+|---|---|---|
+| fixed slider predictions (as before) | 29 vs 29 deaths, same runs and distances | 29 vs 29, same |
+| predictions that drift as the row approaches (`drift=0.15`) | 36 vs 36 (one death swapped) | **41 vs 36** |
+| the same, second seed | **33 vs 31** | **35 vs 32** |
+
+- **Fixed predictions:** the simulator never produces the i-028 situation,
+  because each row's prediction is constant. The identical result shows the
+  change costs nothing there. Points are the same within 5 per run.
+- **Drifting predictions:** each slider's predicted position starts off by
+  N(0, 0.15 m) and converges on the truth between 15 and 5 m, as live
+  predictions shift by about 0.1 m near a row. This adds 7–12 deaths per 150
+  runs. Over the four drifting sets (600 paired runs) the new order has 135
+  deaths against 145. It is never worse in a set, and points are the same.
+- **Plan time:** 99th percentile 15–16 ms, against 14.6 ms.
 
 ## Status
 

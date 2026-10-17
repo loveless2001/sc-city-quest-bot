@@ -59,6 +59,9 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
         // whole following path) unless no other route exists; a double press is
         // one atomic action.
         if(a.length&&st.tween&&!allowInterrupt)continue;
+        // allowInterrupt 'forward': only keys that carry the change on in its
+        // direction (L moves towards higher x), never a reversal.
+        if(a.length&&st.tween&&allowInterrupt==='forward'&&Math.sign(st.tween.to-st.tween.from)!==(a[0]==='L'?1:-1))continue;
         if(a.length&&st.hold>st.z)continue;
         if(a.length===2&&((a[0]==='L'&&st.target!==0)||(a[0]==='R'&&st.target!==2)))continue;
         const n={target:st.target,tween:st.tween&&{...st.tween},z:st.z,frame:st.frame+1,presses:st.presses,taken:st.taken,value:st.value,hits:st.hits,hold:st.hold};
@@ -135,18 +138,42 @@ export function planRobust(options,factors=[1,0.7,0.45,0.2,0]){
 //   3 also allow re-pressing during a lane change,
 //   4 only the next 20 m,
 //   5 nothing fatal: the cheapest set of hits.
+// Since 2026-10-17 (live game i-028, see docs/game-update-BFqScKec.md) by
+// default (FALLBACKS):
+//   order 'thin-first': the measured width is tried at the full distance
+//     margin before the full width at reduced margins. Before, a 0.1 m shift
+//     in a slider's prediction 6 m ahead made the runner's lane fatal under
+//     the 0.3 m hard margin, and a double lane change across the slider's path
+//     at a 0.9 m margin was chosen over staying in a lane it missed by 0.29 m;
+//   forward: where a lane change may be interrupted, keys that carry it on in
+//     its direction are tried before reversals (a last-resort reversal
+//     mid-crossing put the i-028 runner into the fence).
 export const ALT_COST=2500,LAST_RESORT_COST=20000;
 const THIN=1.614+0.05;
+export const FALLBACKS={order:'thin-first',forward:true};
+export const setFallbacks=o=>Object.assign(FALLBACKS,o);
 export function planWithFallbacks(options){
   const thin=o=>({...o,obstacles:o.obstacles.map(b=>b.cost===Infinity?{...b,halfX:Math.min(b.halfX,THIN)}:b)});
   const bestOnly=o=>({...o,obstacles:o.obstacles.map(b=>b.cost===Infinity&&b.best===false?{...b,cost:ALT_COST}:b)});
-  const steps=[
+  const last=o=>({...thin(o),horizon:20,obstacles:thin(o).obstacles.map(b=>b.cost===Infinity?{...b,cost:b.best===false?ALT_COST:LAST_RESORT_COST}:b)});
+  // Interrupting levels: carrying on first (when forward), then any key.
+  const interrupt=(f,m)=>FALLBACKS.forward?[[o=>({...f(o),allowInterrupt:'forward'}),m],[o=>({...f(o),allowInterrupt:true}),m]]:[[o=>({...f(o),allowInterrupt:true}),m]];
+  const steps=FALLBACKS.order==='thin-first'?[
+    [o=>o,[1]],
+    [o=>thin(o),[1,0.7,0.45]],
+    [o=>o,[0.7,0.45,0.2,0]],
+    [o=>thin(o),[0.2,0]],
+    [o=>bestOnly(thin(o)),[1,0.45,0]],
+    ...interrupt(o=>bestOnly(thin(o)),[1,0.45,0]),
+    ...interrupt(o=>({...bestOnly(thin(o)),horizon:20}),[0.45,0]),
+    ...interrupt(last,[0]),
+  ]:[
     [o=>o,[1,0.7,0.45,0.2,0]],
     [o=>thin(o),[1,0.45,0]],
     [o=>bestOnly(thin(o)),[1,0.45,0]],
-    [o=>({...bestOnly(thin(o)),allowInterrupt:true}),[1,0.45,0]],
-    [o=>({...bestOnly(thin(o)),allowInterrupt:true,horizon:20}),[0.45,0]],
-    [o=>({...thin(o),allowInterrupt:true,horizon:20,obstacles:thin(o).obstacles.map(b=>b.cost===Infinity?{...b,cost:b.best===false?ALT_COST:LAST_RESORT_COST}:b)}),[0]],
+    ...interrupt(o=>bestOnly(thin(o)),[1,0.45,0]),
+    ...interrupt(o=>({...bestOnly(thin(o)),horizon:20}),[0.45,0]),
+    ...interrupt(last,[0]),
   ];
   for(let i=0;i<steps.length;i++){const [f,m]=steps[i];const r=planRobust(f(options),m);if(r.safe)return {...r,fallback:i};}
   return {presses:[],value:-Infinity,safe:false,margin:null,fallback:steps.length};

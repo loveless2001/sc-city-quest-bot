@@ -243,7 +243,7 @@ npm test
 
 ## How it was checked
 
-**Unit tests** (`npm test`, 45 pass), covering:
+**Unit tests** (`npm test`, 47 pass), covering:
 
 - key cancellation on stop;
 - the stage clock and its loss;

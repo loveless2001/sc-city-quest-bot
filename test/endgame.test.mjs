@@ -101,6 +101,33 @@ test('the planner clears a fence 30 m ahead at every speed from 25 to 50 m/s',as
   }
 });
 
+test('a slider predicted 0.1 m closer does not set off a crossing across its path (live game i-028)',async()=>{
+  // i-028 at 8173.1 m, 50 m/s, lane 0: a dense row 6 m ahead with a sliding fence
+  // predicted at x -0.6 (lane 0 clears it by 0.29 m, 0.01 m short of the 0.3 m
+  // hard margin) and a cone or barrier in lane 2; a navy coin in lane 1.
+  const {planWithFallbacks,FALLBACKS}=await import('../src/endgame-v3-planner.mjs');
+  const {speedAt}=await import('../src/endgame-v3-course.mjs');
+  assert.deepEqual({...FALLBACKS},{order:'thin-first',forward:true});
+  for(const x of [-0.5,-0.6,-0.65]){
+    const fence={z:8179.1,x,halfX:1.614+0.3,halfZ:1.1,cost:Infinity,confident:true,best:true,sliding:true,softClear:0.6,softCost:400};
+    const p=planWithFallbacks({z:8173.1,target:0,tween:null,obstacles:[fence,{z:8179.1,x:2.8,halfX:1.3,halfZ:1.2,cost:500,confident:true}],
+      coins:[{lane:1,z:8176.3,value:80},{lane:1,z:8184.5,value:10}],speedAt,margin:2,horizon:60,decisionEvery:2,width:120});
+    // It stays in lane 0 past the row (the old order pressed L, L at once and crossed).
+    assert.ok(!p.presses.some(k=>k.z<8181),`x ${x}: ${p.presses.map(k=>k.key+'@'+k.z.toFixed(1))}`);
+    assert.equal(p.margin,2);
+  }
+});
+
+test('a lane change in progress is carried on before it is reversed',async()=>{
+  const {plan,LANES}=await import('../src/endgame-v3-planner.mjs');
+  // Mid-change from lane 0 towards lane 1 at 50 m/s; a fence in lane 1 10 m on.
+  const opts={z:6000,target:1,tween:{from:-1.5,to:0,t:0.05,d:0.15},coins:[],speedAt:()=>50,margin:0,horizon:30,decisionEvery:2,width:120,
+    obstacles:[{z:6010,x:LANES[1],halfX:1.664,halfZ:0.5,cost:Infinity,confident:true,best:true}]};
+  const forward=plan({...opts,allowInterrupt:'forward'});
+  assert.ok(forward.safe);assert.equal(forward.presses[0].key,'L');
+  assert.ok(!forward.presses.some(k=>k.key==='R'&&k.z<6010));
+});
+
 test('letter rows are 45.5 m apart at the start of a word race',()=>{
   const rows=wordRowDistances('Tăng tốc 2',8);
   assert.equal(rows[0],1280+50+45.5);assert.ok(Math.abs(rows[7]-rows[6]-45.5*(1-.6))<1e-9);
