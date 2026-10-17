@@ -76,6 +76,10 @@ export async function createConfiguredPilot(argv){
   if(args.has('--staggered-clearance'))pilot.staggeredClearance=true;
   if(args.has('--occluded-gap-escape'))pilot.occludedGapEscape=true;
   if(args.has('--far-orbit-coins'))pilot.farOrbitCoins=true;
+  // 2026-10-17: all three location medals (medals.mjs) and navy coins from the
+  // final-stage coin detector as pickups.
+  if(args.has('--location-medals'))pilot.locationMedals=true;
+  if(args.has('--navy-coins'))pilot.navyCoins=true;
   if(args.has('--pickup-entry-credit'))pilot.pickupEntryCredit=true;
   if(args.has('--source-pickup-credit'))pilot.sourcePickupCreditMs=30;
   if(args.has('--gift-pickups'))pilot.giftModel=JSON.parse(await readFile(new URL('./gift-model.json',import.meta.url),'utf8'));

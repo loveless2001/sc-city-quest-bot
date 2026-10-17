@@ -78,6 +78,54 @@ Remove `--hazard-only-early-jumps` and `--jump-cones-only` from
 `src/interactive-settings.json` to restore the old jumping. The endgame
 controller never jumps.
 
+## Location medals and navy coins
+
+**Location medals (+200 each):**
+
+- **Where they are:** three discs hang 2 m up in the middle lane: a gold one
+  in Tăng tốc 1, a blue one in Tăng tốc 3, and a green one in Về đích. Each
+  sits at a random point in its stage; the help screen's "600 / 3,200 /
+  3,900 m" is only approximate. Five recorded games put them at 759–977 m,
+  3,304–3,380 m and 4,082–4,132 m on the current course.
+- **Why some were missed:** the early-game controller recognised only the
+  gold one by its colour. The green medal was collected in 26 of 49 recorded
+  games.
+- **How they are found now:** `src/medals.mjs` looks for any of the three
+  ring colours around a pale disc of medal size at medal height, using the
+  exact camera projection. It sees the medals from 40–55 m with no false
+  detections in seven recorded games (`--location-medals`).
+
+**Navy coins (80 each):**
+
+- **Why some were missed:** the early-game controller's coin detector knew 27
+  of the 51 navy coins in live game i-027, and missed 10 of them. It knew 95%
+  of the white coins.
+- **How they are found now:** the final-stage coin detector supplies navy
+  coins to it as well. In the same game it then knows all 51
+  (`--navy-coins`).
+- **Cost:** about 3.5 ms more per frame (median 28 ms).
+
+**Live check (2026-10-17):** two games with both changes against the two
+games just before. Coins are counted by `analysis/early-coin-audit.mjs`,
+medals from the HUD.
+
+| | i-026, i-027 (before) | i-028, i-029 (with medals and navy coins) |
+|---|---|---|
+| navy coins collected | 22/29 (76%), 41/51 (80%) | **33/34 (97%), 30/32 (94%)** |
+| white coins collected | 95%, 94% | 95%, 85% |
+| medals | 3/3, 2/3 (green missed) | 3/3, 2/3 (*) |
+| letters / words | 9 + 1 wrong / 3; 10 / 3 | 11 / 3; 10 / 3 |
+| result | 26,380; 28,510 | 30,070; 25,750 |
+
+(*) In i-029 the blue medal sat at 3,156 m, the same distance as the first
+letter row of that stage's word race. Taking it meant a word-race blocker
+(cone or barrier) and a wrong letter (−80, streak reset), so the controller
+took the letter instead.
+
+i-028 ended at 8,230 m, before the end of the course, by an endgame crash in
+the second sliding stretch. There are hardly any points left after it. The
+cause is a known planner weakness, listed in the update review.
+
 ## Mystery boxes (+200)
 
 The blue "?" boxes open a puzzle worth 200 points. The bot solves the puzzle
@@ -195,7 +243,7 @@ npm test
 
 ## How it was checked
 
-**Unit tests** (`npm test`, 43 pass), covering:
+**Unit tests** (`npm test`, 45 pass), covering:
 
 - key cancellation on stop;
 - the stage clock and its loss;
@@ -227,6 +275,8 @@ On the current course (2026-10-17, bundle `index-BFqScKec.js`):
 |---|---|
 | i-026 | 26,380, full course; takeover at 4,285 m, 3 words |
 | i-027 | 28,510, full course; takeover at 4,286 m, a handover fence measured by contact, 3 words |
+| i-028 | 30,070, ended at 8,230 m (endgame crash, second sliding stretch); medals and navy coins (97%) |
+| i-029 | 25,750, full course; navy coins 94%; blue medal traded for a word-race letter |
 
 The new course gives fewer endgame coins and more letter points. See
 [docs/game-update-BFqScKec.md](docs/game-update-BFqScKec.md).
@@ -255,6 +305,7 @@ src/                       the bot (flat: modules, models, settings)
   manual-handoff.mjs       lane reacquisition when you hand back in the early game
   interruptible-scheduler.mjs  cancellable multi-key inputs
   page-text.mjs            early-game page-text read that a slow page does not hold up
+  medals.mjs               location medals (gold, blue, green) for the early-game controller
   endgame-session.mjs      endgame clock, following/steering, hand-back, timed keys, logs
   endgame-v3-course.mjs    course model: both known courses, speed law, row timetable
   endgame-v3*.mjs          endgame controller (perception, coins, planner)

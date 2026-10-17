@@ -13,6 +13,9 @@ import {PickupEvents,pickupCredit} from './pickup-events.mjs';
 import {whiteCoinSupport,logoCoin} from './white-coins.mjs';
 import {blueGifts,GiftTracker,giftCandidates} from './gift-detector.mjs';
 import {orbitCoins} from './orbit-coins.mjs';
+import {medals} from './medals.mjs';
+import {detectCoins} from './endgame-v3-coins.mjs';
+import {measureRunnerX} from './runner-x.mjs';
 import {lowRails} from './rail-detector.mjs';
 import {SoftRailTracker} from './soft-rails.mjs';
 import {occludedCones,OccludedConeTracker} from './occluded-cones.mjs';
@@ -45,7 +48,16 @@ export class CalibratedPilot extends TrackedPilot {
     const giftObservations=this.giftModel?blueGifts(frame,d.camera,this.giftModel,blueCandidates):[];
     if(this.giftModel&&!this.giftTracker)this.giftTracker=new GiftTracker();
     const gifts=this.giftModel?this.giftTracker.update(giftObservations,this.observationClock):[];
-    const bonuses=[...(this.collectBonuses?goldBonuses(frame,d.camera,d.player):[]),...gifts].sort((a,b)=>b.y-a.y);
+    // The runner's world x from the lane lines (for the exact camera projection
+    // used by the medal and navy-coin detectors).
+    const runnerX=this.locationMedals||this.navyCoins?measureRunnerX(frame):null,px=runnerX&&runnerX.err<3?runnerX.x:null;
+    // All three location medals (gold, blue, green), not only the gold one.
+    const medalObservations=this.locationMedals&&px!=null?medals(frame,{playerX:px}):[];
+    const bonuses=[...(this.collectBonuses?goldBonuses(frame,d.camera,d.player):[]),...medalObservations,...gifts].sort((a,b)=>b.y-a.y);
+    // Navy (80) coins from the final-stage coin detector: the orbit detector
+    // knew 27 of 51 navy coins in live game i-027 (white coins: 95%).
+    const navyObservations=this.navyCoins&&px!=null?detectCoins(frame,{z:0,playerX:px,maxDistance:50}).filter(c=>c.kind==='navy')
+      .map(c=>({kind:'orbit',lane:1-c.lane,x:c.x,y:c.y,bw:c.w,bh:c.h,near:c.y/frame.height,coin:1,confidence:1,navy:true})):[];
     const coneObservations=this.coneModel?(this.rememberCones?occludedCones(frame,d.camera,this.coneModel):coneCandidates(frame,d.camera,d.player,this.coneModel)):[];
     if(this.earlyConeModel&&/B\u1ee9t ph\u00e1/.test(this.stageText))coneObservations.push(...earlyCones(frame,d.camera,this.earlyConeModel));
     if(this.coneModel&&!this.softConeTracker)this.softConeTracker=new SoftConeTracker();
@@ -67,7 +79,7 @@ export class CalibratedPilot extends TrackedPilot {
         coin:o.kind==='green'?letterProbability(frame,o,this.coinModel):0})).filter(o=>
           o.letter>=.65||o.coin>=.65||whitePickup(o));
       const farther=this.farPickups?farGreenPickups(frame,d.camera,this.letterModel,this.coinModel):[];
-      pickupEvents=this.pickupTracker.update([...bonuses,...recognized,...orbitObservations,...farther],frame.height,now-(this.sensorLagMs||0),now+(this.analysisEstimate||5)+this.inputMs*.5);
+      pickupEvents=this.pickupTracker.update([...bonuses,...recognized,...orbitObservations,...navyObservations,...farther],frame.height,now-(this.sensorLagMs||0),now+(this.analysisEstimate||5)+this.inputMs*.5);
       if(this.earlyOnlyOrbits&&/B\u1ee9t ph\u00e1/.test(this.stageText))pickupEvents=pickupEvents.filter(e=>e.kind!=='orbit');
       if(this.publicWordClock)pickupEvents=this.wordClock.correct(pickupEvents,frame.height,this.observationClock,now+(this.analysisEstimate||5)+this.inputMs*.5);
     }
@@ -236,6 +248,6 @@ export class CalibratedPilot extends TrackedPilot {
       keys.push('ArrowUp');commands.push({key:'ArrowUp',atMs:commands.at(-1)?.atMs||0});
       this.lastAutoJump=now;this.lastJump=now;
     }
-    return {...d,planSendClock:timing.sendClock,remainingBusyMs:timing.busy,keys,commands,lane:end,target,reason,plan,staggeredClearance,routeAuthorized,bonuses,giftObservations,gifts,orbitObservations,collectionPlan,coneObservations,railObservations,railTracks,softObstacles,softTimes,pickupEvents,earlyJumpThreat:earlyThreat,jumpDeferredForSoft,jumpDeferredForGreen};
+    return {...d,medalObservations,navyObservations,planSendClock:timing.sendClock,remainingBusyMs:timing.busy,keys,commands,lane:end,target,reason,plan,staggeredClearance,routeAuthorized,bonuses,giftObservations,gifts,orbitObservations,collectionPlan,coneObservations,railObservations,railTracks,softObstacles,softTimes,pickupEvents,earlyJumpThreat:earlyThreat,jumpDeferredForSoft,jumpDeferredForGreen};
   }
 }

@@ -325,6 +325,31 @@ The early-game controller's planning value for a word-race letter goes from
     section's streams single-lane at 9.23 m instead of one or two lanes at
     6 m. That's about 0.11 coins per metre instead of 0.25.
 
+## Live games i-028 and i-029: an endgame weakness
+
+These two games tested the early-game medal and navy-coin changes (see the
+README). Both takeovers were forced at about 4,301 m: the early-game
+controller had a move or a passing obstacle pending the whole 15 m. Both
+handovers went through without a hit.
+
+**i-028 crashed at about 8,180 m**, in the second sliding stretch, which has
+no points left to speak of. This is the first live crash there in 34 games
+(30 batch, 4 interactive):
+
+1. The runner was in lane 0 and planned to pass a sliding fence predicted at
+   x = −0.5, with about 0.3 m of physical clearance.
+2. 6 m before the fence, the prediction moved to −0.6. Under the planner's
+   0.3 m hard slider margin, lane 0 then counted as a collision.
+3. The planner's fallback order tries every distance margin at full fence
+   width before it tries the measured ("thin") width. So it chose a double
+   lane change across the fence's path at zero margin, rather than staying
+   in a lane the fence physically missed.
+4. One plan later, the last-resort level reversed that move mid-crossing.
+
+**To fix, in a separate change:**
+- close to a row, prefer the measured width before a zero-margin crossing;
+- never reverse a crossing in progress at the last-resort level.
+
 ## Status
 
 - The guard expects `index-BFqScKec.js`.
