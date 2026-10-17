@@ -2,6 +2,7 @@
 // Uses the exact camera projection; rejects blobs on known fences, lane lines
 // and the runner, and accepts coin-coloured blobs of coin size at that distance.
 import {CameraModel,LANE_X} from './camera-model.mjs';
+import {STREAM_STEP} from './endgame-v3-course.mjs';
 
 const cam=new CameraModel();
 const FOCAL=cam.height/2/cam.tanHalf;
@@ -81,15 +82,16 @@ export function detectCoins(frame,{z,playerX=0,obstacles=[],maxDistance=60,minDi
     if(n<4)continue;
     const cy=(minY+maxY)/2;
     const why=judge({cx:(minX+maxX)/2,cy,h:maxY-minY+1,w:maxX-minX+1,n,counts,d:cam.distanceForY(cy,1,playerX)});
-    // Consecutive coins in one lane (6 m apart) overlap on screen out to ~45 m
-    // and merge into one tall column: walk it up from its bottom edge, one
-    // coin (bottom at height ~0.5, top ~1.5) per 6 m step.
+    // Consecutive coins in one lane (a stream: 6 m apart on the old course,
+    // 9.23 m on the current one) overlap on screen at range and merge into one
+    // tall column: walk it up from its bottom edge, one coin (bottom at height
+    // ~0.5, top ~1.5) per stream step.
     if(why!=='tall')continue;
     let yb=maxY;
     for(let k=0;k<8;k++){
       const db=cam.distanceForY(yb,0.5,playerX);if(db>maxDistance)break;
       const yt=Math.max(minY,Math.round(cam.project(0,1.5,db,playerX).y));
-      const next=Math.round(cam.project(0,0.5,db+6,playerX).y);
+      const next=Math.round(cam.project(0,0.5,db+STREAM_STEP,playerX).y);
       let sn=0,sx0=Infinity,sx1=-1,sy0=Infinity,sy1=-1;const sc=[0,0,0,0];
       for(let yy=yt;yy<=yb;yy++)for(let xx=minX;xx<=maxX;xx++){const q=yy*width+xx;if(lab[q]!==id)continue;
         sn++;sc[cls[q]]++;if(xx<sx0)sx0=xx;if(xx>sx1)sx1=xx;if(yy<sy0)sy0=yy;if(yy>sy1)sy1=yy;}

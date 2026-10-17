@@ -101,9 +101,16 @@ export function plan({z,target,tween=null,obstacles,coins,speedAt,margin=2,horiz
       }
     }
     if(!next.length)return {presses:[],value:-Infinity,safe:false};
+    // Routes in the same state are merged (the best kept). A lane change in
+    // progress is keyed by its start position and the frames since its key:
+    // keyed by sixths of its duration, as before 2026-10-17, a change pressed
+    // two frames later could share the bucket of one that is further along and
+    // replace it on a tie, so below ~42 m/s (lane change over 0.24 s) no change
+    // ever completed and a fence 30 m ahead had no route. The old course only
+    // reached its fences at 50 m/s.
     const best=new Map();
     for(const s of next){
-      const key=`${s.target}|${s.tween?Math.round(s.tween.from*4)+':'+Math.round(s.tween.t/s.tween.d*6):'-'}${s.hold>s.z?'|hold':''}`;
+      const key=`${s.target}|${s.tween?Math.round(s.tween.from*4)+':'+Math.round(s.tween.t/dt):'-'}${s.hold>s.z?'|hold':''}`;
       const b=best.get(key);if(!b||s.score>b.score)best.set(key,s);}
     beam=[...best.values()].sort((a,b)=>b.score-a.score).slice(0,width);
   }

@@ -25,7 +25,7 @@ const specialPickup=o=>o?.kind==='bonus'||o?.kind==='gift';
 
 export class CalibratedPilot extends TrackedPilot {
   constructor(letterModel,coinModel){super();this.letterModel=letterModel;this.coinModel=coinModel;this.collection=null;this.collectRate=.000006;this.lastAutoJump=-Infinity;this.collectibleRate=new CollectibleRate();}
-  resumeAfterPuzzle(){super.resumeAfterPuzzle();this.collection=null;this.collectibleRate=new CollectibleRate();this.softConeTracker=new SoftConeTracker();this.occludedConeTracker=new OccludedConeTracker();this.pickupTracker=new PickupEvents({whiteValue:this.publicRewardValues?10:5,orbitValue:this.publicRewardValues?80:10,bonusValue:this.publicRewardValues?200:100,greenValue:this.greenPickupValue??15,letterValue:this.prioritizeLetterStreaks?180:25,giftMemoryMs:this.rememberGifts?1100:350});this.giftTracker=new GiftTracker();this.railTracker=new SoftRailTracker(this.railImpactPixels??450);}
+  resumeAfterPuzzle(){super.resumeAfterPuzzle();this.collection=null;this.collectibleRate=new CollectibleRate();this.softConeTracker=new SoftConeTracker();this.occludedConeTracker=new OccludedConeTracker();this.pickupTracker=new PickupEvents({whiteValue:this.publicRewardValues?10:5,orbitValue:this.publicRewardValues?80:10,bonusValue:this.publicRewardValues?200:100,greenValue:this.greenPickupValue??15,letterValue:this.letterPickupValue??(this.prioritizeLetterStreaks?180:25),giftMemoryMs:this.rememberGifts?1100:350});this.giftTracker=new GiftTracker();this.railTracker=new SoftRailTracker(this.railImpactPixels??450);}
   analyse(frame,now=Date.now()){
     if(this.publicWordClock){this.wordClock??=new WordClock();this.wordClock.observe(frame,this.stageText,now);}
     this.observationClock=now-(this.sensorLagMs||0);
@@ -61,7 +61,7 @@ export class CalibratedPilot extends TrackedPilot {
     const softTimes=[-1,0,1].map(l=>softObstacles.filter(o=>o.lane===l).map(o=>o.eta));
     let pickupEvents=[];
     if(this.deadlineRewards){
-      if(!this.pickupTracker)this.pickupTracker=new PickupEvents({whiteValue:this.publicRewardValues?10:5,orbitValue:this.publicRewardValues?80:10,bonusValue:this.publicRewardValues?200:100,greenValue:this.greenPickupValue??15,letterValue:this.prioritizeLetterStreaks?180:25,giftMemoryMs:this.rememberGifts?1100:350});
+      if(!this.pickupTracker)this.pickupTracker=new PickupEvents({whiteValue:this.publicRewardValues?10:5,orbitValue:this.publicRewardValues?80:10,bonusValue:this.publicRewardValues?200:100,greenValue:this.greenPickupValue??15,letterValue:this.letterPickupValue??(this.prioritizeLetterStreaks?180:25),giftMemoryMs:this.rememberGifts?1100:350});
       const recognized=d.objects.filter(o=>o.bh>=8&&o.bw>=5&&o.near>.407).map(o=>({...o,
         letter:o.kind==='green'?letterProbability(frame,o,this.letterModel):0,
         coin:o.kind==='green'?letterProbability(frame,o,this.coinModel):0})).filter(o=>

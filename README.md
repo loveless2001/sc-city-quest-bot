@@ -4,12 +4,15 @@ A screen-reading bot for the Standard Chartered City Quest runner game
 (sccityquest.zenimpact.vn), Hanoi course, Guest play only. It plays in a
 normal browser window that you can take over at any time with **F8**.
 
-- **Before 2,806 m:** the early-game controller steers. This is ChatGPT's
+- **Before 4,285 m:** the early-game controller steers. This is ChatGPT's
   trial-427 pilot and interactive edition (F8/Escape takeover, cancellable
   inputs).
-- **From 2,806 m to the finish:** Claude's endgame controller (endgame-v3)
+- **From 4,285 m to the finish:** Claude's endgame controller (endgame-v3)
   steers. It is the controller of the batch bot, which survived 30 of 30 live
-  runs (mean 31,074 points).
+  runs (mean 31,074 points) on the course before the 2026-10-17 game update.
+
+The distances are those of the current course (game bundle
+`index-BFqScKec.js`, 2026-10-17); see [Course](#course).
 
 The bot uses only screenshots, visible page text and normal keyboard and mouse
 events. There is no login, score submission, purchase, prize claim or hidden
@@ -47,15 +50,16 @@ The F8 shortcut works only while the game page has keyboard focus.
   bot first finds your lane from fresh frames, then steers.
 - **Puzzles:** the bot solves them while it is on. Press F8 or Escape to solve
   one yourself.
-- **Endgame (from 2,806 m):** the endgame controller follows the course on
+- **Endgame (from 4,250 m):** the endgame controller follows the course on
   every frame even while the bot is off, so you can play part of the endgame
-  and hand back at any point.
+  and hand back at any point. Handed back before 4,285 m, the early-game
+  controller steers until then.
   - It waits until the runner has been seen in one lane for 0.2 s.
   - Until it has pressed a few keys itself, it assumes a typical 25 ms
     screenshot lag.
 - **When the endgame clock is lost:** the distance clock comes from the
   timing of the visible HUD stage labels. It is lost if the game tab is
-  hidden, or if a puzzle starts between the last stage label and 2,806 m. The
+  hidden, or if a puzzle starts between the last stage label and 4,250 m. The
   endgame controller then stays off for that run, and F8 uses the early-game
   controller.
 
@@ -82,7 +86,7 @@ itself.
 - **Early box:** one per run, between 600 and 2,400 m, in a random lane. The
   early-game controller goes for it. It was collected in 63 of 66 batch runs
   and in every interactive game that got past 2,400 m.
-- **Endgame boxes:** in 3,300–3,800 m (single sliding fences every 30 m), each
+- **Endgame boxes:** in 4,340–4,840 m (single sliding fences every 30 m), each
   fence row has a 5% chance of a box 15 m after it. That's about 0.8 boxes per
   run, with at least one in more than half of runs. The endgame controller
   used to avoid these on purpose, because the puzzle pause broke its distance
@@ -102,6 +106,51 @@ itself.
     then plans with a wider ±3.5 m distance margin and checks its lane on
     screen, until the fence rows have re-measured the clock.
   - `--endgame-boxes=avoid` restores the old behaviour.
+
+## Course
+
+The bot follows the course of the public game bundle it was checked against
+(`--expected-bundle` in `src/interactive-settings.json`). On another bundle
+it stays off until the new rules have been reviewed.
+
+The 2026-10-17 update (`index-BFqScKec.js`, review in
+[docs/game-update-BFqScKec.md](docs/game-update-BFqScKec.md)) lengthened the
+course:
+
+- **Stages:**
+  - Tăng tốc 2 is now 1,280–3,060 m, and the runner holds its 31 m/s cap from
+    about 2,340 m;
+  - Bứt phá (the final stage) starts at 4,140 m instead of 2,600 m.
+- **Rain stretch, 2,060–3,060 m:** coin streams and no random obstacles.
+- **Final stage, shifted by +1,040 m:**
+  - lane-fence rows at 4,340–4,820 m;
+  - sparse fences to 5,340 m;
+  - dense rows after that;
+  - the course ends at 11,040 m.
+- **No gap before the fences:** the empty stretch before the first sliding
+  fence is gone. The random obstacles now run right up to it at 4,340 m.
+- **Letters ×4:** 40/120/200 per letter, +800 per word, −80 for a wrong lane.
+
+**How the bot handles it:**
+
+- **Course model:** all distances, the speed law (now with the stage speed
+  caps that bind) and the letter-row spacing come from one course model,
+  `src/endgame-v3-course.mjs`. It also keeps the old course for replaying
+  recorded runs.
+- **Handover:**
+  - From 4,250 m the endgame controller follows the course on the early-game
+    controller's frames, and measures the fences that controller tracks.
+  - From 4,285 m it takes over steering, between two of the early-game
+    controller's moves and not while it is passing an obstacle (by 4,300 m in
+    any case).
+  - Up to 4,345 m it plans around the early-game controller's tracks of the
+    last random obstacles (cones, barriers, fences). It measures each fence's
+    distance itself from where the fence meets the road, because the
+    early-game estimate can be off by up to 8 m.
+  - A fence track level with the first sliding row counts as that row's fence
+    once the row is resolved. Until then it stays a likely obstacle.
+- **Letters:** the early-game controller values a letter at 720 instead of 180
+  (`--letter-value=720`).
 
 ## Options
 
@@ -146,7 +195,7 @@ npm test
 
 ## How it was checked
 
-**Unit tests** (`npm test`, 22 pass), covering:
+**Unit tests** (`npm test`, 43 pass), covering:
 
 - key cancellation on stop;
 - the stage clock and its loss;
@@ -155,10 +204,13 @@ npm test
 - shadow following;
 - the late-key crash;
 - the warm-up;
-- the page-text reader.
+- the page-text reader;
+- mystery boxes (on both courses);
+- cone-only jumps;
+- the handover obstacles, follow and takeover distances, and letter rows.
 
 **Live interactive games** (Chrome unless noted, bot on throughout unless
-noted, 2026-10-16):
+noted, 2026-10-16, all on the course before the 2026-10-17 update):
 
 | game | result |
 |---|---|
@@ -168,6 +220,16 @@ noted, 2026-10-16):
 | i-009 (Edge) | 30,140, full course; the dense-boundary case handled live |
 | i-010 | 32,110, full course (with the warm-up) |
 | i-012 | 29,450, full course (with the bounded text read); smoothest opening so far |
+
+On the current course (2026-10-17, bundle `index-BFqScKec.js`):
+
+| game | result |
+|---|---|
+| i-026 | 26,380, full course; takeover at 4,285 m, 3 words |
+| i-027 | 28,510, full course; takeover at 4,286 m, a handover fence measured by contact, 3 words |
+
+The new course gives fewer endgame coins and more letter points. See
+[docs/game-update-BFqScKec.md](docs/game-update-BFqScKec.md).
 
 Earlier failures, all fixed:
 
@@ -194,7 +256,8 @@ src/                       the bot (flat: modules, models, settings)
   interruptible-scheduler.mjs  cancellable multi-key inputs
   page-text.mjs            early-game page-text read that a slow page does not hold up
   endgame-session.mjs      endgame clock, following/steering, hand-back, timed keys, logs
-  endgame-v3*.mjs          endgame controller (course rules, perception, coins, planner)
+  endgame-v3-course.mjs    course model: both known courses, speed law, row timetable
+  endgame-v3*.mjs          endgame controller (perception, coins, planner)
   camera-model.mjs, runner-x.mjs  screen geometry for the endgame
   warmup.mjs, warmup/      launch warm-up on 22 bundled frames from a recorded run
   interactive-settings.json  controller flags and the expected game bundle

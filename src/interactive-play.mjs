@@ -10,7 +10,8 @@ import {RenderedFrameStream} from './rendered-frame-stream.mjs';
 import {commitRoute} from './commit-route.mjs';
 import {routeGroups} from './route-groups.mjs';
 import {launchUserBrowser,keepGameTab} from './user-browser.mjs';
-import {EndgameSession,SettledLane,instrumentEndgame,FINAL_STAGE} from './endgame-session.mjs';
+import {EndgameSession,SettledLane,instrumentEndgame,FINAL_STAGE,TAKEOVER_Z} from './endgame-session.mjs';
+import {LANE_X} from './endgame-v3-course.mjs';
 import {warmUp} from './warmup.mjs';
 import {OverlappedText,playingText} from './page-text.mjs';
 
@@ -22,6 +23,10 @@ const stageFrom=text=>text.match(/Hanoi\s+(Nhập cuộc|Tăng tốc\s*\d|Về �
 // "-60" barrier) if the page shows one.
 const hudScore=text=>Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',',''))||undefined;
 const penaltyShown=text=>Number(text.match(/(?:^|\n)\s*-(30|60)\s*(?:\n|$)/)?.[1])||undefined;
+// Score pop-ups on screen (letters +40/+120/+200, wrong lane -80, word +800,
+// badges and boxes +200), and a completed word's "PHRASE!" banner.
+const popupsShown=text=>{const p=[...text.matchAll(/(?:^|\n)[ \t]*([+-]\d{2,4})[ \t]*(?=\n|$)/g)].map(m=>m[1]);
+  const w=text.match(/(?:^|\n)[ \t]*([A-Z][A-Z ]{3,}!)[ \t]*(?=\n|$)/)?.[1];return p.length||w?[...p,...(w?[w]:[])]:undefined;};
 
 export async function runInteractive({context,page,argv,output,url='https://sccityquest.zenimpact.vn/'}={}){
   await mkdir(output,{recursive:true});
@@ -33,6 +38,10 @@ export async function runInteractive({context,page,argv,output,url='https://scci
   const frameInterval=Number(argv.find(a=>a.startsWith('--frame-ms='))?.split('=')[1])||50;
   const lateFrameInterval=Number(argv.find(a=>a.startsWith('--late-frame-ms='))?.split('=')[1])||frameInterval;
   let closed=false,pilot=null,scheduler=null,handoff=new ManualHandoff(),settled=new SettledLane(),currentToken=-1;
+  // After the endgame controller takes over, an early-game controller keeps
+  // analysing frames (no keys) until the last random obstacles are passed: its
+  // tracks are the endgame planner's obstacles there (endgame-session.mjs).
+  let junctionPilot=null,junctionCreating=null,lastDecision=null;
   let needsVersionCheck=true,resetting=Promise.resolve(),mouseOwned=false,frames=0,lastReport=0,resultSeen=false,puzzleStarted=null;
   const held=new Set();
   const live=token=>!closed&&!page.isClosed()&&control.valid(token);
@@ -185,6 +194,25 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     const out={};for(const k of ['dt','text','read','wait','decode','analyse','age']){const v=timing.map(t=>t[k]).filter(x=>x!=null).sort((a,b)=>a-b);
     if(v.length)out[k]=[v[v.length>>1],v[Math.floor(v.length*.9)],v.at(-1)].map(x=>Math.round(x));}
     const stale=timing.filter(t=>t.stale).length;if(stale)out.stale=stale;timing=[];return out;};
+  // Until the last random obstacles are passed, the early-game controller's
+  // obstacle tracks go to the endgame planner (see junctionPilot). Its lane
+  // prior comes from the endgame's lane model (its own lanes are -1..1, with
+  // -1 on the left). Returns the analysis time (ms).
+  function junctionStep(image,stage,now){
+    if(!endgame.junction(now)){if(junctionPilot||endgame.ctl?.external){junctionPilot=null;endgame.external(null,now);}return 0;}
+    const ctl=endgame.ctl,seen=ctl.seenPx;
+    const lane=endgame.mode==='drive'||seen==null?ctl.state.target:LANE_X.reduce((b,x,i)=>Math.abs(x-seen)<Math.abs(LANE_X[b]-seen)?i:b,0);
+    if(!junctionPilot){
+      junctionCreating??=createConfiguredPilot(argv).then(p=>{junctionPilot=prepareManualHandoff(p,1-lane,stage,Date.now());}).catch(()=>{}).finally(()=>{junctionCreating=null;});
+      return 0;
+    }
+    const jp=junctionPilot,t0=Date.now(),last=endgame.keys?.log.at(-1);
+    jp.stageText=stage;jp.commandLane=jp.lane=1-lane;jp.sensorLagMs=now-(image.captureStart+image.captureEnd)/2;
+    if(last)jp.lastMove=Math.max(jp.lastMove??-Infinity,last.sent);
+    try{endgame.external(jp.analyse(image.frame,now),now);}catch(error){endgame.external(null,now);}
+    const ms=Date.now()-t0;jp.analysisEstimate=.8*(jp.analysisEstimate??ms)+.2*ms;
+    return ms;
+  }
   // One endgame frame, with the bot on (steering) or off (following only).
   let endgameText=null,endgameFrames=0,endgamePuzzle=false,hudMissingSince=null,puzzleClosingUntil=0;
   async function endgameStep(tick){
@@ -203,7 +231,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       else{endgameText=read.text;await endgame.ingest(read.log);}
     }
     const text=endgameText;endgameFrames++;
-    const leave=async reason=>{await endgame.save(reason);endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;puzzleClosingUntil=0;};
+    const leave=async reason=>{await endgame.save(reason);endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;puzzleClosingUntil=0;junctionPilot=null;};
     if(text.includes('NEXT QUEST')){
       await recordResult(text);await leave('result');
       if(enabled)control.setEnabled(false,'Run ended · start a new game');return;
@@ -241,8 +269,9 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     if(closed)return;
     const now=Date.now(),regain=enabled&&live(token)&&(endgame.mode!=='drive'||endgame.driveToken!==token);
     if(!enabled||!live(token)||regain)endgame.shadow(now);
+    const junctionMs=junctionStep(image,stage,now);
     const s0=Date.now(),record=await endgame.step(image.frame,{captureMs:image.captureStart,stage});
-    record.timing={probe:probeMs,wait:image.waitMs,decode:image.decodeMs,step:Date.now()-s0,since:tick-(endgame.lastTick??tick)};endgame.lastTick=tick;
+    record.timing={probe:probeMs,wait:image.waitMs,decode:image.decodeMs,step:Date.now()-s0,since:tick-(endgame.lastTick??tick),...(junctionMs?{junction:junctionMs}:{})};endgame.lastTick=tick;
     timing.push({f:frames,at:now,stage,dt:record.timing.since,text:probeMs,wait:image.waitMs,decode:image.decodeMs,analyse:record.timing.step,age:now-image.captureStart});
     if(regain){
       // Control comes back: keep following until the runner is seen settled in a lane.
@@ -283,11 +312,15 @@ export async function runInteractive({context,page,argv,output,url='https://scci
           await writeFile(resolve(output,'game-version.json'),JSON.stringify({checkedAt:new Date().toISOString(),moduleScripts:scripts,expectedBundle:expected,matched},null,2));
           control.availability(matched,matched?'You control the game':'Game updated · bot needs review');needsVersionCheck=false;
         }
-        if(endgame?.tracking&&control.available){await endgameStep(Date.now());continue;}
+        // The endgame loop runs once the endgame controller follows the course,
+        // except while the early-game controller still steers: before
+        // TAKEOVER_Z, and until it has handed over.
+        const pilotSteers=control.enabled&&endgame?.mode!=='drive'&&(pilot&&currentToken===control.generation||!endgame?.steering(Date.now()));
+        if(endgame?.tracking&&control.available&&!pilotSteers){await endgameStep(Date.now());continue;}
         if(!control.enabled){
           if(pilot||scheduler||stream.active)await reset();
           // Watch the visible stage labels so that the endgame controller can
-          // start following the course at 2806 m while you play.
+          // start following the course (FOLLOW_Z) while you play.
           if(endgame&&control.available&&Date.now()-lastSync>250){
             lastSync=Date.now();await endgame.sync(page);
             if(endgame.ready(endgame.stage,Date.now()))endgame.start(Date.now(),null);
@@ -317,15 +350,24 @@ export async function runInteractive({context,page,argv,output,url='https://scci
         const stage=stageFrom(text);if(!stage){control.setEnabled(false,'Use the Hanoi course');continue;}
         if(endgame&&(stage===FINAL_STAGE||Date.now()-lastSync>250)){
           lastSync=Date.now();await endgame.sync(page);
-          if(endgame.ready(stage,Date.now())){
-            // Hand the run from the early-game pilot to the endgame controller.
-            if(pilot&&currentToken===token){
+          // From FOLLOW_Z the endgame controller follows the course (below, on
+          // the early-game controller's frames).
+          if(endgame.ready(stage,Date.now()))endgame.start(Date.now(),pilot&&currentToken===token?1-pilot.commandLane:null);
+          // Hand the run from the early-game pilot to the endgame controller at
+          // TAKEOVER_Z, between two of its moves (or 15 m on in any case). Its
+          // tracks of the last random obstacles stay with the endgame planner.
+          if(pilot&&currentToken===token&&endgame.steering(Date.now())){
+            // Not while it is about to pass an obstacle it tracks (~350 ms, 15 m).
+            const passing=[...(lastDecision?.trackedFences??[]),...(lastDecision?.softObstacles??[])].some(o=>Number.isFinite(o.impact)&&o.impact-Date.now()>-150&&o.impact-Date.now()<350);
+            const calm=!scheduler?.queue?.length&&!scheduler?.active&&Date.now()-pilot.lastMove>300&&!passing;
+            if(calm||endgame.zAt(Date.now())>=TAKEOVER_Z+15){
               await scheduler?.drain();if(!live(token))continue;
-              const now=Date.now(),lane=1-pilot.commandLane;endgame.start(now,lane);endgame.drive(now,lane,token,{continuous:true});
-              console.log(JSON.stringify({endgameTakeover:{z:endgame.zAt(now).toFixed(1),lane}}));
+              const now=Date.now(),lane=1-pilot.commandLane;endgame.drive(now,lane,token);
+              junctionPilot=endgame.junction(now)?pilot:null;
+              console.log(JSON.stringify({endgameTakeover:{z:endgame.zAt(now).toFixed(1),lane,calm}}));
               scheduler=null;pilot=null;
-            }else endgame.start(Date.now(),null);
-            continue;
+              continue;
+            }
           }
         }
         const image=await capture();if(!live(token))continue;
@@ -361,10 +403,16 @@ export async function runInteractive({context,page,argv,output,url='https://scci
           if(decision.keys.includes('ArrowUp'))groups.push({at:Date.now(),events,commands:[{key:'ArrowUp',offset:0}]});
         }else if(decision.commands?.length)groups.push({at:now,from:state.commandLane,events,commands:decision.commands.map(c=>({key:c.key,offset:c.atMs}))});
         commitRoute(queue,groups,state,controlled,flags.has('--guard-plan-state'));
+        // Before the takeover the endgame controller follows on the same frames
+        // (after this frame's keys are scheduled), and already measures the
+        // ground contact of the fences this controller tracks.
+        let followMs;lastDecision=decision;
+        if(endgame?.tracking&&endgame.mode!=='drive'){const f0=Date.now();if(endgame.junction(now))endgame.external(decision,now);
+          await endgame.step(image.frame,{captureMs:image.captureStart,stage});followMs=Date.now()-f0;}
         frames++;
         if(flags.has('--capture'))await saveFrame(image.shot);
-        timing.push({f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,jump:decision.keys?.includes('ArrowUp')?1:undefined,score:hudScore(text),pen:penaltyShown(text),
-          wait:image.waitMs,decode:image.decodeMs,analyse:analysisMs,age:now-image.captureStart});lastTick=tick;
+        timing.push({f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,jump:decision.keys?.includes('ArrowUp')?1:undefined,score:hudScore(text),pen:penaltyShown(text),pop:popupsShown(text),
+          wait:image.waitMs,decode:image.decodeMs,analyse:analysisMs,follow:followMs,age:now-image.captureStart});lastTick=tick;
         if(Date.now()-lastReport>5000){
           lastReport=Date.now();const progress={frames,score:Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',','')),stage,analysisMs,enabled:control.enabled,timing:timingSummary()};
           await writeFile(resolve(output,'progress.json'),JSON.stringify(progress,null,2));console.log(JSON.stringify(progress));

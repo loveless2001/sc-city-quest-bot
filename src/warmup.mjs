@@ -7,7 +7,7 @@ import {readFile} from 'node:fs/promises';
 import {createConfiguredPilot} from './controller-config.mjs';
 import {prepareManualHandoff} from './manual-handoff.mjs';
 import {EndgameV3} from './endgame-v3.mjs';
-import {timeAtDistance} from './endgame-v3-course.mjs';
+import {timeAtDistance,withCourse} from './endgame-v3-course.mjs';
 
 export async function warmUp({argv,sharp,rounds=4,budgetMs=5000}){
   const t0=Date.now(),dir=new URL('./warmup/',import.meta.url);
@@ -24,10 +24,14 @@ export async function warmUp({argv,sharp,rounds=4,budgetMs=5000}){
     const pilot=prepareManualHandoff(await createConfiguredPilot(argv),0,early[0].stage,now);
     for(const s of early){pilot.stageText=s.stage;pilot.sensorLagMs=20;pilot.analyse(s.frame,now);now+=52;frames++;}
     // A throwaway endgame controller, its clock set so each frame sits at its
-    // recorded distance (lane rows, sparse rows, dense rows, sliding rows).
-    const ctl=new EndgameV3({lagPrior:25});
-    for(const s of late){const t=Date.now();ctl.phase=t-timeAtDistance(s.z)*1000;if(!ctl.active)ctl.takeOver(t,1);
-      ctl.perceive(s.frame,{captureMs:t});ctl.plan(t+5);frames++;}
+    // recorded distance (lane rows, sparse rows, dense rows, sliding rows), on
+    // the course the frames were recorded on (synchronous: nothing else runs
+    // while the course rules are switched).
+    withCourse(list.course??'DnBWvl2N',()=>{
+      const ctl=new EndgameV3({lagPrior:25});
+      for(const s of late){const t=Date.now();ctl.phase=t-timeAtDistance(s.z)*1000;if(!ctl.active)ctl.takeOver(t,1);
+        ctl.perceive(s.frame,{captureMs:t});ctl.plan(t+5);frames++;}
+    });
   }
   return {ms:Date.now()-t0,frames,rounds:round};
 }

@@ -66,6 +66,11 @@ export async function createConfiguredPilot(argv){
   if(args.has('--ground-green-pickups'))pilot.groundGreenPickups=true;
   const greenValue=argv.find(a=>a.startsWith('--green-value='));
   if(greenValue)pilot.greenPickupValue=Math.max(5,Math.min(100,Number(greenValue.split('=')[1])));
+  // Planning value of a word-race letter (default 180 with --letter-streaks, else
+  // 25). The 2026-10-17 game update made letters worth 4x (40/120/200, word +800,
+  // wrong lane -80): --letter-value=720 keeps the streak weighting at that scale.
+  const letterValue=argv.find(a=>a.startsWith('--letter-value='));
+  if(letterValue)pilot.letterPickupValue=Math.max(5,Math.min(2000,Number(letterValue.split('=')[1])));
   if(args.has('--consistent-plan-clock'))pilot.usePlanningClock=true;
   if(args.has('--time-scaled-clearance'))pilot.timeScaledClearance=true;
   if(args.has('--staggered-clearance'))pilot.staggeredClearance=true;

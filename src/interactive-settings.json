@@ -26,6 +26,7 @@
     "--bounded-fence-motion",
     "--shared-fence-speed",
     "--letter-streaks",
+    "--letter-value=720",
     "--late-collision-before=75",
     "--protect-paired-deadline",
     "--mature-speed-prior",
@@ -54,12 +55,13 @@
     "--far-pickups",
     "--public-word-clock",
     "--current-game-rewards",
-    "--expected-bundle=index-DnBWvl2N.js",
+    "--expected-bundle=index-BFqScKec.js",
     "--hazard-only-early-jumps",
     "--jump-cones-only",
     "--endgame-v3",
     "--late-frame-ms=40"
   ],
   "endgame": "claude-sc-city-quest endgame-v3 (live c-037..c-066, 30/30 survived); boundary fix 2026-10-16",
-  "jumps": "Early-game jumps only for a tracked cone the route cannot avoid (--hazard-only-early-jumps --jump-cones-only), 2026-10-17; trial 427 jumped about once a second."
+  "jumps": "Early-game jumps only for a tracked cone the route cannot avoid (--hazard-only-early-jumps --jump-cones-only), 2026-10-17; trial 427 jumped about once a second.",
+  "course": "Game bundle index-BFqScKec.js (2026-10-17): course lengthened; see docs/game-update-BFqScKec.md. Letters valued 720 (4x) for the new letter points."
 }

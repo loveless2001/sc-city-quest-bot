@@ -5,6 +5,7 @@
 | [interactive-edition-report.md](interactive-edition-report.md) | merging the endgame controller into the interactive edition, every live check, and the fixes found on the way |
 | [dense-boundary-fix.md](dense-boundary-fix.md) | the endgame's dense-anchor fix (behind live batch run c-030's death) and its validation |
 | [game-update-DnBWvl2N.md](game-update-DnBWvl2N.md) | review of the 2026-10-16 game bundle update (guest analytics only, gameplay unchanged) |
+| [game-update-BFqScKec.md](game-update-BFqScKec.md) | review of the 2026-10-17 game update (course lengthened, letters ×4) and the port to it |
 | [chatgpt-control-verification.json](chatgpt-control-verification.json) | ChatGPT's own checks of the takeover controls (2026-10-15) |
 
 ## Where the code came from
@@ -26,11 +27,11 @@ out of this repo:
 
 The `jpeg-js` dependency was used only by `play.mjs`, so it is gone too.
 
-**Endgame.** `endgame-v3*.mjs`, `camera-model.mjs` and `runner-x.mjs` are
-identical to those in `claude-sc-city-quest\bot-next`. That copy is the batch
-bot's controller plus the interactive hand-back hooks, which do nothing in
-batch play. When you change the endgame here, copy the change there too (or
-the other way round) so the batch bot and this bot stay the same.
+**Endgame.** `endgame-v3*.mjs`, `camera-model.mjs` and `runner-x.mjs` were
+identical to those in `claude-sc-city-quest\bot-next` (the batch bot's
+controller plus the interactive hand-back hooks) until the 2026-10-17 course
+port. The port (course model, handover obstacles, coin stream step) is in this
+repo only; `bot-next` still has the old course.
 
 **Changes made in this repo's history** (see the report):
 
@@ -41,7 +42,9 @@ the other way round) so the batch bot and this bot stay the same.
 - the loading-screen timeout tolerance;
 - the end-of-run crash fix;
 - the launch warm-up;
-- the bounded early-game page-text read.
+- the bounded early-game page-text read;
+- endgame mystery-box collection and cone-only early jumps;
+- the port to the 2026-10-17 course (see game-update-BFqScKec.md).
 
 ## What is not in this repo
 
@@ -51,7 +54,8 @@ These remain in the development workspace
 - the headless batch bot (`bot-v2`, `runs/batch.sh`);
 - recorded runs (`runs/c-*`, `runs/i-*`);
 - the endgame analysis tools (`analysis/`: shadow replays, anchor replays,
-  boundary probes, the v3-sim2 simulator, coin audits).
+  boundary probes, the v3-sim2 and v3-sim3 simulators, the handover
+  calibration replay `junction-replay.mjs`, coin audits).
 
 Paths in the reports such as `analysis/…`, `runs/…` and `bot-next/…` refer
 to that workspace.

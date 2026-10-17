@@ -1,13 +1,17 @@
-// Final-stage controller for the current public bundle. Takes over after the
-// runner passes 2800 m, where the course rules become (mostly) deterministic:
-//   3300-3780 m  one sliding fence every 30 m (lane and direction from screenshots)
-//   3810-4300 m  one fence every 40-60 m (sliding below 4000 m), distance measured
-//   4300 m +     two-lane rows in a fixed pattern and spacing (sliding 7000-7500 m)
+// Final-stage controller for the public bundle's course (endgame-v3-course.mjs).
+// Takes over where the course rules become (mostly) deterministic; on the
+// current course (old course in brackets):
+//   4340-4820 m  one sliding fence every 30 m (lane and direction from screenshots)  [3300-3780]
+//   4850-5340 m  one fence every 40-60 m (sliding below 5040 m), distance measured   [3810-4300, 4000]
+//   5340 m +     two-lane rows in a fixed pattern and spacing (sliding 8040-8540 m)  [4300, 7000-7500]
+// On the current course the random obstacles run up to the first lane row, so
+// the last of them (seen by the early-game controller) are passed in as
+// external obstacles (setExternal).
 // Each row keeps candidate explanations (start lane, slide direction, fence or
 // not) scored against the dark-pixel profile of its screen band every frame.
 // The distance clock comes from visible HUD stage changes; no game state is read.
-import {LANE_X,FENCE_HALF_X,FENCE_HALF_Z,laneFenceRows,denseRows,isMoving,straddlesMovingEdge,slideX,timeAtDistance,
-  distanceAtTime,speedAt,SPARSE_END,FORCE_END} from './endgame-v3-course.mjs';
+import {LANE_X,FENCE_HALF_X,FENCE_HALF_Z,laneFenceRows,firstSparseRow,denseRows,isMoving,straddlesMovingEdge,slideX,timeAtDistance,
+  distanceAtTime,speedAt,LANE_START,SPARSE_END,FORCE_END} from './endgame-v3-course.mjs';
 import {footDistance} from './endgame-v3-perception.mjs';
 import {detectCoins,CoinTracker} from './endgame-v3-coins.mjs';
 import {planWithFallbacks,LANES,laneDuration,xAt} from './endgame-v3-planner.mjs';
@@ -75,7 +79,7 @@ function scoreAgainst(p,fenceXs){
   return (ni?si/ni:0)-(no?so/no:0)*(fenceXs.length?1:0.6)-(fenceXs.length?0:0.02);
 }
 
-// Mystery boxes (5% of the 3300-3780 rows) sit 15 m after their row in a
+// Mystery boxes (5% of the lane rows) sit 15 m after their row in a
 // random lane; collecting one opens a puzzle worth 200 points. The game pauses
 // until the puzzle's continue click, and the clock is shifted by that pause
 // from the page's timestamps (resumeExact). boxes:'collect' (default) plans
@@ -101,6 +105,24 @@ const BOX_CONFIRM_VOTES=12,BOX_CONFIRM_WINDOW=14,BOX_VALUE=100,BOX_RADIUS=1.0;
 const BOX_HOLD_AFTER=30;
 // After a box's puzzle pause, until the lane rows have re-measured the clock.
 const POST_PAUSE_MARGIN=3.5;
+// External (early-game controller) obstacles, see setExternal(). On 47 recorded
+// runs (analysis/junction-replay.mjs, 484 fence sightings 10-40 m ahead) the
+// distance from a fence track's predicted impact, against the fence's ground
+// contact on the same frame, was off by: median -0.5 m, 5-95% -3.5..+1.0 m for
+// tracks seen 6+ times, but up to -8 m (fence farther than predicted) in runs of
+// frames; for younger tracks median -2 m, 5-95% -7.8..+6.5 m. So a fence is
+// measured by its ground contact in its track's lane (+-EXT_SEARCH m), and the
+// measurements are kept per track (a fence does not move). Windows (m, around
+// the track's distance z; the planner adds its +-2 m margin):
+//   contact agreeing with z (EXT_AGREE): the contact distance +-EXT_MEASURED;
+//   contact disagreeing: fatal over both, +-1;
+//   no contact yet: fatal z-2..z+3 (young: z-3..z+4), and EXT_WIDE_COST over
+//   z-4..z+8 (young: z-8..z+8).
+// The band around the first lane row where a fence track may be its slider;
+// penalties for cones (-30) and barriers (-60), valued above their points (a
+// misread may be worse), over z-4..z+6.
+const EXT_SEARCH=8,EXT_AGREE=2,EXT_MEASURED=0.8,EXT_WIDE_COST=3000,EXT_MATURE_HITS=6;
+const EXT_ROW_BAND=4,EXT_CONE_COST=150,EXT_BARRIER_COST=250;
 // One frame's votes ([0|1] per lane) for box b; sets b.lane once a lane is
 // confirmed (sticky) and returns it.
 export function confirmBox(b,bits,d=null){
@@ -166,11 +188,11 @@ export class EndgameV3{
     Object.assign(this,{margin,horizon,width,decisionEvery,boundaryBand,lagPrior,boxMode:boxes});
     this.phase=null;this.active=false;this.state=null;
     this.rows=laneFenceRows().map(z=>new Row(z,'lane',{zFixed:true}));
-    // The first sparse row follows the lane rows exactly (3780 + 30 m).
-    const first=new Row(3810,'sparse',{zFixed:true,lo:3810,hi:3810});this.rows.push(first);
+    // The first sparse row follows the lane rows exactly (the last one + 30 m).
+    const z1=firstSparseRow(),first=new Row(z1,'sparse',{zFixed:true,lo:z1,hi:z1});this.rows.push(first);
     this.chain={prev:first,pending:null,done:false};
     this.denseStart=null;this.denseResiduals=[];this.denseAlt=null;this.denseLog=[];
-    this.boxes=new Map();
+    this.boxes=new Map();this.extContacts=new Map();
     this.coins=new CoinTracker();this.footBias=[];this.zNow=null;this.zOffset=0;this.laneResiduals=[];
     this.keyHistory=[];this.runnerObs=[];this.lagMs=null;this.clockFixes=[];
   }
@@ -284,7 +306,7 @@ export class EndgameV3{
   // 60 m past the box).
   markCollected(boxRow){const b=boxRow&&this.boxes.get(boxRow.z+15);if(b)b.collected=true;this.laneResiduals=[];
     if(boxRow)this.wideMarginUntil=boxRow.z+15+60;}
-  // A mystery box (row z + 15 m in the 3300-3780 section) pauses the game until
+  // A mystery box (row z + 15 m in the lane-row section) pauses the game until
   // the continue click; shift the clock by that pause.
   resume(resumeMs){
     const zSeen=this.zAt(this.pausedAt);
@@ -297,7 +319,7 @@ export class EndgameV3{
   }
   bias(){return -0.3;}
 
-  // Sparse rows follow each other at 40-60 m; the first row at or past 4300 m
+  // Sparse rows follow each other at 40-60 m; the first row at or past SPARSE_END
   // is the first dense row (two fences in lanes 0 and 2, fixed pattern after).
   nextBounds(){const p=this.chain.prev,u=this.unc(p);return {lo:p.z-u+40,hi:p.z+u+60};}
   discover(frame,zFrame,px,allMasks){
@@ -360,7 +382,7 @@ export class EndgameV3{
       if(found)this.startAlt(row.z,this.unc(row));
       return;
     }
-    // Near 4300 m the boundary row may be the last sparse fence or the first dense
+    // Near SPARSE_END the boundary row may be the last sparse fence or the first dense
     // row (the estimate is good to ~2 m, and one dense fence may be a cone). Start
     // the pattern on it but keep searching 40-60 m on (see above). A single fence in
     // the middle lane is sparse (the first dense row uses the outer lanes).
@@ -481,8 +503,65 @@ export class EndgameV3{
         confident:p.confident,best:p.best.some(b=>Math.abs(b-x)<0.06),sliding,softClear:sliding?0.6:0.3,softCost:sliding?400:150});
       for(const x of p.soft)out.push({z:row.z,x,halfX:NONFENCE_HALF_X,halfZ:0.6+zUnc,cost:NONFENCE_COST,confident:p.confident});
     }
+    out.push(...this.externalObstacles(zNow));
     if(this.boxMode==='avoid')for(const [zb,b] of this.boxes){if(zb<zNow-4||zb>zNow+this.horizon+6)continue;
       for(let l=0;l<3;l++)if(b.votes[l]>=3&&b.votes[l]>=0.4*b.n)out.push({z:zb,x:LANE_X[l],halfX:1.25,halfZ:1.3,cost:3000,confident:true,box:true});}
+    return out;
+  }
+  // Random obstacles before the first lane row, from the early-game controller's
+  // tracks: [{z, lane (0..2), kind: 'fence'|'cone'|'barrier', seenMs}], z on this
+  // clock at the track's predicted impact; replaced every frame (null: none).
+  // A fence track within EXT_ROW_BAND of the first lane row may be that row's
+  // slider seen by the other detector. Once the row is resolved, a track in a
+  // lane its slider occupied when the track was last seen is left to the row
+  // model; before that it is kept, but only as the likely explanation (fatal
+  // unless no route exists, see the planner's fallbacks).
+  setExternal(list,atMs){
+    if(!list){this.external=null;return;}
+    const first=this.rows.find(r=>r.kind==='lane'&&r.z===LANE_START),p=first?.passing();
+    const near=e=>e.kind==='fence'&&first&&Math.abs((this.extMeasured(e)??e.z)-LANE_START)<EXT_ROW_BAND;
+    const slider=e=>first.plausible().some(h=>first.fenceXs(h,this.gameTime(e.seenMs??atMs)).some(x=>Math.abs(x-LANE_X[e.lane])<1.4));
+    const kept=[];let rowTracks=0;
+    for(const e of list){
+      if(e.z>=LANE_START+EXT_ROW_BAND||!Number.isFinite(e.z))continue;
+      if(near(e)){if(p.confident&&slider(e)){rowTracks++;continue;}if(!p.confident){kept.push({...e,best:false});continue;}}
+      kept.push(e);
+    }
+    this.external={at:atMs,list:kept,rowTracks};
+  }
+  // Ground-contact distance of an external fence track: the median of the
+  // largest cluster (1.2 m) of its measurements, if it has 2 or more; else null.
+  extMeasured(e){
+    const s=e.id!=null&&this.extContacts.get(e.id);if(!s||s.length<2)return null;
+    let cl=[];for(const v of s){const c=s.filter(w=>Math.abs(w-v)<1.2);if(c.length>cl.length)cl=c;}
+    return cl.length>=2?median(cl):null;
+  }
+  // Measure the external fences' ground contact in their tracks' lanes (nearer
+  // rows and the runner masked). Close to the runner, a fence in its lane is
+  // hidden by the runner mask: the earlier measurements stand.
+  measureExternal(frame,zFrame,px,masks){
+    for(const e of this.external?.list??[]){
+      if(e.kind!=='fence'||e.id==null)continue;
+      const d=e.z-zFrame;if(d<8-EXT_SEARCH||d>45+EXT_SEARCH)continue;
+      let best=null;
+      for(let dd=Math.max(8,d-EXT_SEARCH);dd<=Math.min(45,d+EXT_SEARCH);dd+=0.25){const v=contactScore(frame,dd,px,masks,[LANE_X[e.lane]]);if(v!=null&&(!best||v>best.v))best={v,dd};}
+      if(best&&best.v>0.12){const s=this.extContacts.get(e.id)??[];s.push(zFrame+best.dd);if(s.length>12)s.shift();this.extContacts.set(e.id,s);}
+    }
+  }
+  externalObstacles(zNow){
+    const out=[];
+    // Fence centre within lo..hi.
+    const fence=(e,lo,hi,cost)=>out.push({z:(lo+hi)/2,x:LANE_X[e.lane],halfX:FENCE_HALF_X+0.25,halfZ:FENCE_HALF_Z+(hi-lo)/2,cost,confident:true,
+      best:cost!==Infinity||e.best!==false,...(cost===Infinity?{softClear:0.3,softCost:150}:{}),external:true});
+    for(const e of this.external?.list??[]){
+      if(e.z<zNow-12||e.z>zNow+this.horizon+12)continue;
+      if(e.kind!=='fence'){out.push({z:e.z+1,x:LANE_X[e.lane],halfX:NONFENCE_HALF_X,halfZ:0.6+5,cost:e.kind==='cone'?EXT_CONE_COST:EXT_BARRIER_COST,confident:true,external:true});continue;}
+      const m=this.extMeasured(e);
+      if(m!=null&&Math.abs(m-e.z)<=EXT_AGREE)fence(e,m-EXT_MEASURED,m+EXT_MEASURED,Infinity);
+      else if(m!=null)fence(e,Math.min(m,e.z)-1,Math.max(m,e.z)+1,Infinity);
+      else if(e.hits>=EXT_MATURE_HITS){fence(e,e.z-2,e.z+3,Infinity);fence(e,e.z-4,e.z+8,EXT_WIDE_COST);}
+      else{fence(e,e.z-3,e.z+4,Infinity);fence(e,e.z-8,e.z+8,EXT_WIDE_COST);}
+    }
     return out;
   }
   // Confirmed boxes ahead, as planner rewards ({lane, z, value} like coins).
@@ -543,7 +622,7 @@ export class EndgameV3{
       const h=row.best(),xs=row.fenceXs(h,T);
       // Distance residual from the ground-contact score (nearer rows masked, not
       // this one): lane rows calibrate the clock, dense rows their alignment.
-      const firstLane=row.kind==='lane'&&row.z===3300;
+      const firstLane=row.kind==='lane'&&row.z===LANE_START;
       const conf=row.passing().confident;
       if((d<30||firstLane&&d<55)&&(row.kind==='lane'&&(conf||firstLane)||row.kind==='dense'&&!row.alt&&conf)){
         for(const x of xs){let best=null;
@@ -568,6 +647,7 @@ export class EndgameV3{
       const bits=[0,1,2].map(l=>{const v=boxScore(frame,d,px,l);return v!=null&&v>0.22?1:0;});
       for(let l=0;l<3;l++)b.votes[l]+=bits[l];
       confirmBox(b,bits,d);this.boxes.set(zb,b);}
+    this.measureExternal(frame,zFrame,px,masks);
     this.discover(frame,zFrame,px,masks);this.alignDense(frame,zFrame,px,masks);this.resolveDense(frame,zFrame,px,masks);this.refineDense();
     const zNowP=this.zAt(Date.now());
     const det=detectCoins(frame,{z:zFrame,playerX:px,obstacles:this.obstacles(zNowP).filter(o=>o.cost===Infinity).map(o=>({...o,halfX:FENCE_HALF_X}))});
@@ -593,6 +673,7 @@ export class EndgameV3{
       rows:visible.slice(0,4).map(r=>{const p=r.passing();return {z:+r.z.toFixed(1),k:r.kind[0],f:p.fences,b:p.best,s:p.soft,c:p.confident,n:r.frames,...(r.mixed?{mx:1}:{})};}),
       coins:coins.filter(c=>!c.box).slice(0,6).map(c=>`${c.lane}@${c.z.toFixed(1)}:${c.value}`),
       ...(boxes.length?{boxes:boxes.map(b=>`${b.lane}@${b.z}`)}:{}),
+      ...(this.external?{ext:this.external.list.map(e=>{const m=e.kind==='fence'?this.extMeasured(e):null;return `${e.kind[0]}${e.lane}@${e.z.toFixed(1)}${m!=null?'/'+m.toFixed(1):''}${e.best===false?'?':''}`;}),...(this.external.rowTracks?{extRow:this.external.rowTracks}:{})}:{}),
       zOffset:+this.zOffset.toFixed(2),lagMs:this.lagMs,clockFixes:this.clockFixes.length,denseStart:this.denseStart&&+this.denseStart.toFixed(1),denseShift:this.denseShift,
       ...(this.chain.boundary?{boundary:+this.chain.boundary.z.toFixed(1)}:{}),...(this.denseAlt?{denseAlt:+this.denseAlt.start.toFixed(1)}:{})};
     return {presses,record};

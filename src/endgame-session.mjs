@@ -1,18 +1,30 @@
-// Endgame controller (2800 m onward) inside the interactive edition.
+// Endgame controller (final stage) inside the interactive edition.
 // The distance clock comes from timestamps of visible HUD stage-label changes.
-// From 2806 m the controller follows the course on every frame, also while the
-// bot is off ("shadow"), so control can be handed back at any point; it only
-// sends keys while the bot is on. Only visible page text and screenshots are
-// read; no game state is accessed.
+// From FOLLOW_Z the controller follows the course on every frame, also while
+// the bot is off ("shadow"), so control can be handed back at any point; it
+// steers from TAKEOVER_Z, and only sends keys while the bot is on. Only visible
+// page text and screenshots are read; no game state is accessed.
 import {writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {EndgameV3} from './endgame-v3.mjs';
-import {timeAtDistance,distanceAtTime,LANE_X} from './endgame-v3-course.mjs';
+import {timeAtDistance,distanceAtTime,LANE_X,STAGE_START,FOLLOW_Z,TAKEOVER_Z,PATTERN_START} from './endgame-v3-course.mjs';
 import {ManualHandoff} from './manual-handoff.mjs';
 
+export {FOLLOW_Z,TAKEOVER_Z} from './endgame-v3-course.mjs';
 export const FINAL_STAGE='Bứt phá';
-export const TAKEOVER_Z=2806;
-const STAGE_BOUNDARY={'Tăng tốc 1':500,'Tăng tốc 2':1100,'Tăng tốc 3':1700,'Về đích':2300,'Bứt phá':2600};
+// Stage starts that calibrate the clock (the first label shows before the run moves).
+const stageBoundary=t=>t==='Nhập cuộc'?undefined:STAGE_START[t];
+// Until the endgame controller steers it plans around the early-game
+// controller's tracks of the last random obstacles; their lanes are -1..1
+// with -1 on the left, the controller's lanes 0..2 with 2 on the left.
+export function pilotObstacles(decision,zAt){
+  const out=[];
+  for(const t of decision?.trackedFences??[])if(t.hits>=2&&!t.forecast&&Number.isFinite(t.impact))
+    out.push({id:'f'+t.id,z:zAt(t.impact),lane:1-t.lane,kind:'fence',seenMs:t.seen,hits:t.hits});
+  for(const o of decision?.softObstacles??[])if(Number.isFinite(o.impact))
+    out.push({id:'s'+o.id,z:zAt(o.impact),lane:1-o.lane,kind:o.kind==='cones'?'cone':'barrier',seenMs:o.seen});
+  return out;
+}
 
 // Page timestamps of visible events: stage-label changes, the puzzle screen
 // appearing, its continue click, and the tab being hidden (the game clock then
@@ -131,7 +143,7 @@ export class EndgameSession{
       if(this.ctl)this.invalidate('tab hidden',h.at);else this.phase=null;
     }
     for(const c of log.stage){
-      const t=c.t.trim(),z=STAGE_BOUNDARY[t];
+      const t=c.t.trim(),z=stageBoundary(t);
       // A new run (without a result screen seen, e.g. after a reload).
       if(t==='Nhập cuộc'&&(this.ctl||this.invalid||this.phase!=null)){await this.save('new run');this.newGame();}
       this.clockLog.push({stage:t,at:c.at});this.stage=t;
@@ -143,8 +155,14 @@ export class EndgameSession{
     for(const e of log.pause)if(e.type==='pause'&&!this.ctl&&this.phase!=null&&e.at>this.phaseAt){this.phase=null;this.clockLog.push({clockLost:'puzzle',at:e.at});}
     this.pauseEvents.push(...log.pause);
   }
-  // At the takeover distance with a usable clock.
-  ready(stage,now){return !this.ctl&&!this.invalid&&this.phase!=null&&stage===FINAL_STAGE&&this.zAt(now)>=TAKEOVER_Z;}
+  // At the distance where following starts, with a usable clock.
+  ready(stage,now){return !this.ctl&&!this.invalid&&this.phase!=null&&stage===FINAL_STAGE&&this.zAt(now)>=FOLLOW_Z;}
+  // Past the distance where the controller steers (when the bot is on).
+  steering(now){return this.tracking&&this.zAt(now)>=TAKEOVER_Z;}
+  // The last random obstacles are still ahead or alongside.
+  junction(now){return this.tracking&&this.zAt(now)<PATTERN_START+5;}
+  // The early-game controller's latest analysis (see pilotObstacles); null clears.
+  external(decision,now){if(!this.ctl)return;this.ctl.setExternal(decision?pilotObstacles(decision,ms=>this.ctl.zAt(ms)):null,now);}
   // Start following the course (lane: 0..2, the controller's numbering; null
   // when unknown).
   start(now,lane){

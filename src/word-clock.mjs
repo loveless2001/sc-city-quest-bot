@@ -1,4 +1,5 @@
 import {CourseClock,wordRowDistances} from './course-clock.mjs';
+import {LETTER_INTERVAL} from './endgame-v3-course.mjs';
 import {WordHudTracker} from './word-hud.mjs';
 export class WordClock{
   constructor(){this.clock=new CourseClock();this.hud=new WordHudTracker();this.stage=null;this.rows=[];this.matches=new Map();}
@@ -20,7 +21,7 @@ export class WordClock{
       const q=(e.y-height/2)/focal,deltaZ=3.8*(1-q*pitch)/(q+pitch)-10;
       const worldZ=playerZ+deltaZ;
       const index=this.rows.reduce((best,z,i)=>Math.abs(z-worldZ)<Math.abs(this.rows[best]-worldZ)?i:best,0);
-      const gap=Math.min(index?this.rows[index]-this.rows[index-1]:35,index+1<this.rows.length?this.rows[index+1]-this.rows[index]:35);
+      const gap=Math.min(index?this.rows[index]-this.rows[index-1]:LETTER_INTERVAL,index+1<this.rows.length?this.rows[index+1]-this.rows[index]:LETTER_INTERVAL);
       if(Math.abs(this.rows[index]-worldZ)>Math.min(6,gap*.3))continue;
       const old=this.matches.get(index),hits=old?.lane===e.lane?old.hits+1:1;
       this.matches.set(index,{lane:e.lane,hits,seen:observedAt,event:e});
