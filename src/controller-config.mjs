@@ -80,6 +80,7 @@ export async function createConfiguredPilot(argv){
   // final-stage coin detector as pickups.
   if(args.has('--location-medals'))pilot.locationMedals=true;
   if(args.has('--navy-coins'))pilot.navyCoins=true;
+  if(args.has('--opening-white-coins'))pilot.openingWhiteCoins=true;
   if(args.has('--pickup-entry-credit'))pilot.pickupEntryCredit=true;
   if(args.has('--source-pickup-credit'))pilot.sourcePickupCreditMs=30;
   if(args.has('--gift-pickups'))pilot.giftModel=JSON.parse(await readFile(new URL('./gift-model.json',import.meta.url),'utf8'));

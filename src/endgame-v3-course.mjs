@@ -4,7 +4,8 @@
 // Two courses are known:
 //   BFqScKec (index-BFqScKec.js, live from 2026-10-17, the default): stages
 //     lengthened, final stage from 4140 m, lane-fence rows straight after the
-//     random obstacles (no breather), course end at 11040 m.
+//     random obstacles (no breather), course end at 11040 m. index-CE9I5eWz.js
+//     (2026-10-19) plays the same course (menu and sign-up changes only).
 //   DnBWvl2N (index-kcDsL1AL.js and index-DnBWvl2N.js, until 2026-10-17): the
 //     course of all runs recorded before; kept for replaying them.
 // The constants below are live bindings: useCourse()/withCourse() switch them.
@@ -15,7 +16,7 @@ export const FENCE_HALF_X=1.614,FENCE_HALF_Z=0.5;
 const BASE_SPEED=20,ACCEL=0.12,MAX_SPEED=50;
 
 export const COURSES={
-  BFqScKec:{bundle:'index-BFqScKec.js',
+  BFqScKec:{bundle:'index-BFqScKec.js',sameCourse:['index-CE9I5eWz.js'],
     stages:[['Nhập cuộc',0,25],['Tăng tốc 1',500,28],['Tăng tốc 2',1280,31],['Tăng tốc 3',3060,34],['Về đích',3840,37],['Bứt phá',4140,50]],
     finalRampEnd:4540,patternStart:4340,laneStart:4340,laneEnd:4840,sparseEnd:5340,denseFull:5640,
     tightenStart:7040,tightenEnd:9040,forceEnd:11040,moving:[[4340,5040],[8040,8540]],
@@ -54,6 +55,8 @@ export function useCourse(name){
   return name;
 }
 // Runs fn with another course's rules (synchronous code only).
+// The course a public bundle plays, or undefined.
+export const courseOfBundle=bundle=>Object.keys(COURSES).find(n=>COURSES[n].bundle===bundle||COURSES[n].sameCourse?.includes(bundle));
 export function withCourse(name,fn){const prev=COURSE;useCourse(name);try{return fn();}finally{useCourse(prev);}}
 useCourse('BFqScKec');
 

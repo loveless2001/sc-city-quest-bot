@@ -12,7 +12,9 @@ normal browser window that you can take over at any time with **F8**.
   runs (mean 31,074 points) on the course before the 2026-10-17 game update.
 
 The distances are those of the current course (game bundle
-`index-BFqScKec.js`, 2026-10-17); see [Course](#course).
+`index-BFqScKec.js`, 2026-10-17); see [Course](#course). The live bundle
+`index-CE9I5eWz.js` (2026-10-19) plays the same course; only the menus changed
+([docs/game-update-CE9I5eWz.md](docs/game-update-CE9I5eWz.md)).
 
 The bot uses only screenshots, visible page text and normal keyboard and mouse
 events. There is no login, score submission, purchase, prize claim or hidden
@@ -104,6 +106,35 @@ controller never jumps.
   coins to it as well. In the same game it then knows all 51
   (`--navy-coins`).
 - **Cost:** about 3.5 ms more per frame (median 28 ms).
+
+**The first second of a game (2026-10-19):**
+
+- **Runner position:** the health-warning banner covers the lane-line rows
+  that find the runner's position for about the first 17 frames. Until then
+  the navy-coin and medal detectors had no runner position and did nothing.
+  The early-game controller now measures the lane lines just above the banner
+  while it is up (`measureRunnerX(frame,{startRows:true})`). On five recorded
+  games this agrees with the usual rows to 0.04 m (p95). Without the option
+  the result is unchanged, so the endgame is unaffected.
+- **White coins:** all coins spawn together at the start, facing the camera.
+  For about the first second the controller's own white-coin check (size,
+  shape, logo model) rejects most of them. In live game i-024 its first white
+  pickup came at frame 20, and two lane-0 coins went by.
+  - With `--opening-white-coins` the final-stage coin detector supplies white
+    coins in Nhập cuộc until the own check has recognised one in two frames.
+  - In replays of five recorded openings, white pickups start at frame 2–4
+    instead of 20–26 where the own check was late.
+  - In those replays the controller decides to fetch the early coins; the
+    other two games' decisions are unchanged.
+- **Live check (i-031, 2026-10-19):** in the first 150 m it collected 8 of 8
+  coins, and in the first 400 m 13 of 13 white coins and 4 of 5 navy. The
+  navy miss at 320 m was a lane-timing choice, not detection.
+  - The five games before (i-024, i-027, i-029, i-030) collected 4–7 of 6–8
+    coins in the first 150 m, and missed 1–2 white coins each in the first
+    400 m.
+  - One game is not conclusive, but every opening coin was collected.
+  - The game itself ended in Tăng tốc 3 when its window lost focus (another
+    window was clicked), not by a crash.
 
 **Live check (2026-10-17):** two games with both changes against the two
 games just before. Coins are counted by `analysis/early-coin-audit.mjs`,

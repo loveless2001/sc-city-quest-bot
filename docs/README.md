@@ -6,6 +6,7 @@
 | [dense-boundary-fix.md](dense-boundary-fix.md) | the endgame's dense-anchor fix (behind live batch run c-030's death) and its validation |
 | [game-update-DnBWvl2N.md](game-update-DnBWvl2N.md) | review of the 2026-10-16 game bundle update (guest analytics only, gameplay unchanged) |
 | [game-update-BFqScKec.md](game-update-BFqScKec.md) | review of the 2026-10-17 game update (course lengthened, letters ×4) and the port to it |
+| [game-update-CE9I5eWz.md](game-update-CE9I5eWz.md) | review of the 2026-10-19 game update (guest button renamed "Chơi thử", sign-up form; gameplay unchanged) |
 | [chatgpt-control-verification.json](chatgpt-control-verification.json) | ChatGPT's own checks of the takeover controls (2026-10-15) |
 
 ## Where the code came from

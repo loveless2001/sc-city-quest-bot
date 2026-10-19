@@ -3,14 +3,18 @@
 import {CameraModel} from './camera-model.mjs';
 const cam=new CameraModel();
 const ROWS=[640,625,610];
+// For about the first second of a game the health-warning banner covers the
+// rows above; these rows sit between the runner's feet and the banner. Used
+// only when the usual rows give nothing, and only with both lines matched.
+const START_ROWS=[595,580,565];
 // Expected screen x of the two inner lane lines at screen row y for runner x px.
 // Ground distance of a bottom screen row barely depends on the camera yaw.
-const rowD=new Map(ROWS.map(y=>[y,cam.distanceForYExact(y,0,0)]));
+const rowD=new Map([...ROWS,...START_ROWS].map(y=>[y,cam.distanceForYExact(y,0,0)]));
 function lineXs(y,px){const d=rowD.get(y);return [cam.project(1.375,0,d,px).x,cam.project(-1.375,0,d,px).x];}
-export function measureRunnerX(frame){
+function estimate(frame,rows,both){
   const {data,width,height}=frame,C=data.length/(width*height);
   const estimates=[];
-  for(const y of ROWS){
+  for(const y of rows){
     if(y>=height)continue;
     // White runs along the row inside the road.
     const runs=[];let s=-1;
@@ -26,9 +30,13 @@ export function measureRunnerX(frame){
     };
     for(let px=-3.2;px<=3.2;px+=0.1)tryPx(px);
     const c0=best.px;for(let px=c0-0.1;px<=c0+0.1;px+=0.02)tryPx(px);
-    if(best&&(best.ea<2.5||best.eb<2.5))estimates.push(best);
+    if(best&&(both?best.ea<2.5&&best.eb<2.5:best.ea<2.5||best.eb<2.5))estimates.push(best);
   }
   if(!estimates.length)return null;
   estimates.sort((a,b)=>a.e-b.e);
   return {x:estimates[0].px,err:estimates[0].e};
+}
+// {startRows:true} falls back to START_ROWS when the usual rows give nothing.
+export function measureRunnerX(frame,{startRows=false}={}){
+  return estimate(frame,ROWS,false)??(startRows?estimate(frame,START_ROWS,true):null);
 }

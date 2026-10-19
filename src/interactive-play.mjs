@@ -130,7 +130,8 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       const checked=await tap(page.getByText('Tôi đã đủ 18 tuổi trước khi bắt đầu chơi game.',{exact:true}),token);
       if(checked)await tap(button('Xác nhận'),token);return;
     }
-    for(const name of ['Bắt đầu chạy','VN Hà Nội','Chơi','Chơi ngay (Guest)']){
+    // Guest button: 'Chơi ngay (Guest)' until index-BFqScKec.js, 'Chơi thử' since index-CE9I5eWz.js.
+    for(const name of ['Bắt đầu chạy','VN Hà Nội','Chơi','Chơi thử','Chơi ngay (Guest)']){
       if(await tap(button(name),token)){control.status('Starting Guest game…');return;}
     }
     control.status('Waiting for Hanoi track');
