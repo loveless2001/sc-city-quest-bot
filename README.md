@@ -44,6 +44,9 @@ has changed the bot stays disabled until its rules have been reviewed.
 
 The F8 shortcut works only while the game page has keyboard focus.
 
+Each session leaves a log folder in `work/`. To clear old ones, double-click
+**`Clear Old Logs.cmd`** (see [Clearing old logs](#clearing-old-logs)).
+
 ## Playing yourself
 
 - **Stopping:** F8 or Escape stops the bot, and so does switching to another
@@ -274,10 +277,49 @@ npm test
   - result and solved-puzzle screenshots;
   - for runs that reach the endgame, `endgame-<time>.json` with clock samples,
     hand-offs, keys and per-frame decisions.
+- **Clearing old logs:** see [Clearing old logs](#clearing-old-logs).
+
+## Clearing old logs
+
+Each session leaves a folder of a few MB in `work/` (far more with
+`--capture`), and the bot's browser profile collects caches. To clear them:
+
+1. Double-click **`Clear Old Logs.cmd`** in the bot's folder (or run
+   `npm run clean`).
+2. It lists what it would move to the Recycle Bin, with sizes, and asks
+   `Move these to the Recycle Bin? [y/N]`.
+3. Type `y` and press Enter to clear them. Press Enter alone to change
+   nothing.
+
+Nothing is deleted outright: everything goes to the Recycle Bin, so you can
+restore it from there.
+
+- **What it clears by default:**
+  - every session folder except the newest 3 that hold a game (folders where
+    nothing was played go too);
+  - bench outputs and stray `.log` files.
+- **What it always keeps:** the browser profiles' sign-ins, settings and 18+
+  confirmation.
+- **What it leaves alone,** listed under "Left alone":
+  - the newest session while the bot is running, and the browser caches while
+    the game window is open;
+  - anything the Recycle Bin can't take: paths of 250 or more characters, or
+    items larger than the bin.
+
+**Options:** pass them after `npm run clean --` (for example
+`npm run clean -- --all`), or to `Clear Old Logs.cmd` from a terminal.
+
+| option | effect |
+|---|---|
+| `--dry-run` | list what would go and change nothing |
+| `--keep=N` | keep the newest N sessions with a game (default 3) |
+| `--cache` | also clear the browser caches (the game downloads them again) |
+| `--all` | clear every session folder and the browser caches |
+| `--yes` | don't ask first |
 
 ## How it was checked
 
-**Unit tests** (`npm test`, 47 pass), covering:
+**Unit tests** (`npm test`, 50 pass), covering:
 
 - key cancellation on stop;
 - the stage clock and its loss;
@@ -289,7 +331,11 @@ npm test
 - the page-text reader;
 - mystery boxes (on both courses);
 - cone-only jumps;
-- the handover obstacles, follow and takeover distances, and letter rows.
+- the handover obstacles, follow and takeover distances, and letter rows;
+- which course each live game bundle plays, and the version guard.
+
+The log cleaner was checked on fake work folders (Recycle Bin moves, sessions
+in use, paths too long for the bin) and with a dry run on a real one.
 
 **Live interactive games** (Chrome unless noted, bot on throughout unless
 noted, 2026-10-16, all on the course before the 2026-10-17 update):
@@ -333,6 +379,7 @@ i-011 ended when the window lost focus to the user's click. Details are in
 
 ```
 Start City Quest Bot.cmd   launcher (installs dependencies if missing)
+Clear Old Logs.cmd         moves old session logs to the Recycle Bin (tools/clean-logs.mjs)
 src/                       the bot (flat: modules, models, settings)
   interactive-play.mjs     entry point: browser lifecycle, early game and endgame loops
   bot-control.mjs          F8, Escape, on-page button, focus handling
@@ -349,6 +396,6 @@ src/                       the bot (flat: modules, models, settings)
   warmup.mjs, warmup/      launch warm-up on 22 bundled frames from a recorded run
   interactive-settings.json  controller flags and the expected game bundle
 test/                      unit tests (node --test)
-tools/                     live check and offline benches (see tools/README.md)
+tools/                     live check, log cleanup and offline benches (see tools/README.md)
 docs/                      reports and provenance
 ```

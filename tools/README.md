@@ -18,6 +18,36 @@ node tools/live-check.mjs work/live/g-002 --edge
 node tools/live-check.mjs work/live/g-003 --toggle
 ```
 
+## Clearing old logs
+
+`clean-logs.mjs` (or `Clear Old Logs.cmd` in the repo root): moves old logs
+to the Windows Recycle Bin after listing them and asking.
+
+- **What it moves:**
+  - session folders (`work/interactive-<time>/` and `work/live/<name>/`)
+    except the newest `--keep=N` that hold a game (default 3; `--all` keeps
+    none);
+  - `work/text-read-bench/` and stray `*.log` files;
+  - with `--cache` or `--all`, the browser caches in the bot's and the live
+    check's profiles.
+- **What it leaves alone:**
+  - the profiles' sign-ins and settings;
+  - the newest session while the bot or a live check is running, and caches
+    while the browser is open.
+- **Recycle Bin limits:** the Windows shell can't recycle a path of 260 or
+  more characters; it offers to delete it permanently instead.
+  - So nothing with a path over 250 characters, or larger than the bin, is
+    handed to it.
+  - Items go one at a time, and each is checked in the bin afterwards; the run
+    stops if one disappears without reaching it.
+  - If Windows still asks to delete something permanently, answer No.
+
+```
+node tools/clean-logs.mjs --dry-run
+node tools/clean-logs.mjs
+node tools/clean-logs.mjs --all --yes
+```
+
 ## Offline benches
 
 These need a game recorded with `--capture`, such as a live-check output

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/interactive-play.mjs",
+    "clean": "node tools/clean-logs.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {
