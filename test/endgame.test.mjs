@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {BotControl} from '../src/bot-control.mjs';
 import {EndgameKeys,EndgameSession,SettledLane,TAKEOVER_Z,FOLLOW_Z,pilotObstacles} from '../src/endgame-session.mjs';
 import {EndgameV3} from '../src/endgame-v3.mjs';
-import {timeAtDistance,STAGE_START,LANE_START,PATTERN_START,LANE_X} from '../src/endgame-v3-course.mjs';
+import {timeAtDistance,STAGE_START,LANE_START,PATTERN_START,LANE_X,courseOfBundle} from '../src/endgame-v3-course.mjs';
 import {wordRowDistances} from '../src/course-clock.mjs';
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -246,4 +246,12 @@ test('a key in flight when the run ends does not crash the session',async()=>{
   await sleep(30);assert.ok(release,'key was sent');
   await s.save('result');s.newGame();release();await sleep(20);
   assert.equal(s.ctl,null);assert.equal(keys.error,undefined);
+});
+
+test('each live bundle maps to its course, and the guard expects a known one',()=>{
+  for(const bundle of ['index-BFqScKec.js','index-CE9I5eWz.js','index-B8HeQgVv.js'])assert.equal(courseOfBundle(bundle),'BFqScKec',bundle);
+  assert.equal(courseOfBundle('index-DnBWvl2N.js'),'DnBWvl2N');assert.equal(courseOfBundle('index-unknown.js'),undefined);
+  const {args}=JSON.parse(readFileSync(new URL('../src/interactive-settings.json',import.meta.url),'utf8'));
+  const expected=args.find(a=>a.startsWith('--expected-bundle='))?.split('=')[1];
+  assert.ok(courseOfBundle(expected),expected);
 });

@@ -50,7 +50,8 @@ export class CalibratedPilot extends TrackedPilot {
     const gifts=this.giftModel?this.giftTracker.update(giftObservations,this.observationClock):[];
     // The runner's world x from the lane lines (for the exact camera projection
     // used by the medal and navy-coin detectors); higher rows while the
-    // health-warning banner covers the usual ones (first second of a game).
+    // health-warning banner covers the usual ones (first second of a game,
+    // until index-CE9I5eWz.js; see runner-x.mjs).
     // Opening white coins (see below) while the own white-coin check has not
     // yet recognized one in two frames, in the first stage only.
     const openingWhite=this.openingWhiteCoins&&(this.ownWhiteFrames??0)<2&&/Nhập cuộc/.test(this.stageText);

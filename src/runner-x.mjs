@@ -2,10 +2,15 @@
 // so the white lane lines near the bottom of the screen shift with the runner.
 import {CameraModel} from './camera-model.mjs';
 const cam=new CameraModel();
+// Since index-B8HeQgVv.js (2026-10-20) the health warning stays at the bottom
+// left (x 185-458, rows 639-668), hiding row 640's left line: the other rows
+// keep the reading, which is lost on 1-1.4% of frames (recorded games with the
+// warning painted in; docs/game-update-B8HeQgVv.md).
 const ROWS=[640,625,610];
-// For about the first second of a game the health-warning banner covers the
-// rows above; these rows sit between the runner's feet and the banner. Used
-// only when the usual rows give nothing, and only with both lines matched.
+// Until index-CE9I5eWz.js, for about the first second of a game, the health
+// warning covered the rows above; these rows sit between the runner's feet and
+// it. Used only when the usual rows give nothing, and only with both lines
+// matched.
 const START_ROWS=[595,580,565];
 // Expected screen x of the two inner lane lines at screen row y for runner x px.
 // Ground distance of a bottom screen row barely depends on the camera yaw.

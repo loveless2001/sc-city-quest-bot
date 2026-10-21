@@ -60,6 +60,8 @@ test('an error in a read that ran in the background is reported on the next get'
 
 test('only the running game counts as playing',()=>{
   assert.equal(playingText('Hanoi Nhập cuộc\nĐiểm số 310'),true);
+  // Since index-B8HeQgVv.js the health warning is always on the page.
+  assert.equal(playingText('Hanoi Nhập cuộc\nĐiểm số 310\n00+\nChơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe'),true);
   for(const text of [null,'','Đang vào game Điểm số','Hanoi Bứt phá Điểm số 10 GHÉP HÌNH','THỬ THÁCH BẤT NGỜ Điểm số','NEXT QUEST Điểm Số 31,000 Điểm số'])
     assert.equal(playingText(text),false,text);
 });

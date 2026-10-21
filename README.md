@@ -13,7 +13,10 @@ normal browser window that you can take over at any time with **F8**.
 
 The distances are those of the current course (game bundle
 `index-BFqScKec.js`, 2026-10-17); see [Course](#course). The live bundle
-`index-CE9I5eWz.js` (2026-10-19) plays the same course; only the menus changed
+`index-B8HeQgVv.js` (2026-10-20) plays the same course. Its health warning now
+stays at the bottom left of the screen, which the bot tolerates
+([docs/game-update-B8HeQgVv.md](docs/game-update-B8HeQgVv.md)). The bundle
+before it, `index-CE9I5eWz.js` (2026-10-19), changed only the menus
 ([docs/game-update-CE9I5eWz.md](docs/game-update-CE9I5eWz.md)).
 
 The bot uses only screenshots, visible page text and normal keyboard and mouse
@@ -308,6 +311,8 @@ On the current course (2026-10-17, bundle `index-BFqScKec.js`):
 | i-027 | 28,510, full course; takeover at 4,286 m, a handover fence measured by contact, 3 words |
 | i-028 | 30,070, ended at 8,230 m (endgame crash, second sliding stretch); medals and navy coins (97%) |
 | i-029 | 25,750, full course; navy coins 94%; blue medal traded for a word-race letter |
+| i-032 (bundle `index-B8HeQgVv.js`) | 27,560, full course; calm takeover at 4,287 m; 11 letters, 3 words, all three medals |
+| i-033 (bundle `index-B8HeQgVv.js`) | 28,740, full course; forced takeover at 4,301 m; 9 letters, 3 words, all three medals |
 
 The new course gives fewer endgame coins and more letter points. See
 [docs/game-update-BFqScKec.md](docs/game-update-BFqScKec.md).
