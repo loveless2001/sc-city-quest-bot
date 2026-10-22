@@ -72,12 +72,18 @@ re-run on recorded games i-027, i-029 and i-030, with and without the panel.
 
 - **Endgame (`analysis/endgame-replay.mjs`):** replayed from the takeover to
   the end of each game, open loop (the logged keys move the runner).
+  - **Re-run on 2026-10-22:** the first run read each endgame frame with the
+    next frame's time and record, a pairing error in the replay tools (see
+    `claude-sc-city-quest/analysis/frame-pairing-2026-10-22.md`). The numbers
+    below are from the corrected run.
   - **Safety:** no plan was unsafe, with or without the panel.
-  - **Keys:** the first planned key differs on 13, 16 and 54 of about 2,170
-    frames per game. The runner position differs by more than 0.3 m on 14–26.
-  - **Fallbacks:** plans with relaxed margins rose from 241 to 258, 242 to 292
-    and 201 to 227. Centimetre-level position differences tip near-ties
-    between equally safe routes; worth watching live.
+  - **Keys:** the first planned key differs on 106, 58 and 577 of about 2,170
+    frames per game. The runner position differs by more than 0.3 m on 12–19.
+  - **Fallbacks:** plans with relaxed margins went from 244 to 215 (i-027),
+    211 to 230 (i-029) and 243 to 166 (i-030), with no consistent direction.
+    Centimetre-level position differences tip near-ties between equally safe
+    routes. The first run had shown a rise in all three (241 to 258, 242 to
+    292, 201 to 227).
 - **Page text:** the warning's text is now always on the page. The playing,
   stage, score and pop-up checks each anchor on their own label, and none
   matches "00+" or "180".
@@ -127,7 +133,9 @@ matched `index-B8HeQgVv.js` in both.
 - **Fallbacks:** 8.9% and 9.4% of plans, against 5.0–7.9% in those four games.
   As before, they are nearly all in the second sliding range (8,040–8,540 m)
   and the tightened dense rows after it, where every game has them (24–54%).
-  This is in line with the offline replay's +7–21%.
+  The corrected offline replay shows no consistent effect of the panel (−32%
+  to +9%), so it doesn't explain this rise. Two games are too few to tell it
+  from game-to-game variation.
 - **i-033's late first row:** the row's two candidate slider positions stayed
   open until 11 m out. One of them (lane 2) coincided with a random fence the
   early-game controller tracked 3 m before the row (4,336.8 m by contact).

@@ -488,8 +488,16 @@ Chrome, bot on throughout):
   collecting one, and the clock error after its puzzle, are still untested
   live.
 - **How "none" was checked:** the controller's own box test was recomputed on
-  every captured frame in 3,300–3,800 m (`analysis/box-live-votes.mjs`). No
-  position reached more than 10 votes, the false-hit level.
+  every captured frame in 3,300–3,800 m (`analysis/box-live-votes.mjs`).
+  - **False hits only:** they score at most 0.39 and never vote on 12 of 14
+    frames. Real boxes (i-012, i-018, i-020) reach about 0.9 and vote on
+    every frame.
+  - **Re-measured on 2026-10-22:** the tool used to read each endgame frame
+    with the next frame's distance and runner position. That first count
+    gave at most 10 votes. Correctly paired, i-013 has 16 of 25 false votes
+    at 3,525 m in lane 2, beside the roadside banner, so a vote count alone
+    doesn't separate them. See
+    `claude-sc-city-quest/analysis/frame-pairing-2026-10-22.md`.
 - **i-014:**
   - The bot was turned off ("You control the game") 50 ms before the result
     screen.
@@ -500,22 +508,27 @@ Chrome, bot on throughout):
 - **Slow PC:** frame decoding was about 1.7× slower than in earlier games
   (13–19 ms against 8–9 ms) in i-013 and part of i-014, so the PC was under
   other load.
-- **Detection fix found by this check:**
+- **Detection rule changed after this check:**
   - The same recomputation on an earlier live game (i-012, old controller)
     found a real endgame box (3,465 m, lane 0) that the old controller avoided.
-  - On live frames it was missed at 55–59 m (a few pixels) and for 2 frames
-    behind a fence: 19 of 25 votes. My first rule (≥85% of all frames) would
-    never have confirmed it.
-  - The rule is now 12 of the last 14 frames, which confirms it at 29.9 m.
-    The 19 batch boxes are still confirmed, with no false ones; a test was
-    added.
+  - That count gave 19 of 25 votes: missed at 55–59 m and for 2 frames behind
+    a fence. My first rule (≥85% of all frames) would never have confirmed it.
+  - So the rule became 12 of the last 14 frames, which confirmed it at
+    29.9 m. The 19 batch boxes are still confirmed, with no false ones; a test
+    was added.
+  - **Correction (2026-10-22):** those misses came from the tool's frame
+    pairing (each frame read with the next one's distance and runner
+    position). Correctly paired, the box votes on all 25 frames. Both rules
+    confirm it, 12 of 14 at 36.8 m. The 12-of-14 rule stays. It confirms
+    the batch boxes (31.6–36.7 m) and, offline, the three live ones (i-012,
+    i-018, i-020; 36–39 m), and no false hit.
 
 **Second live series** (approved; batch idle; up to 4 games, stopping at the
 first endgame box):
 
 | game | result | endgame box |
 |---|---|---|
-| i-016 | **31,570**, full course | none (8 votes at most) |
+| i-016 | **31,570**, full course | none (13 false votes at most, score ≤ 0.32) |
 | i-017 | ended at 44 s (~1,480 points) by a focus loss | – |
 | i-018 | **9,870**, crashed at ~3,330 m | collected at 3,315 m, then crash |
 
@@ -525,7 +538,8 @@ first endgame box):
   front only after the browser closed. The 15-minute focus thefts (18:14:37,
   18:30:04) remain unexplained.
 - **i-018 collected a box and then crashed:**
-  - Box in lane 0 at 3,315 m, confirmed 34.2 m ahead (22 of 24 frames).
+  - Box in lane 0 at 3,315 m, confirmed 34.2 m ahead. Offline, it votes on
+    all 24 frames.
   - Puzzle solved. The page's pause came 12 ms before the predicted collection
     time, so the clock shift was accurate.
   - The plan had a double lane change 1.6 m past the box, because the next
@@ -603,7 +617,7 @@ box was collected and survived; foreground-window logger running):
 
 | game | result | endgame box |
 |---|---|---|
-| i-019 | **31,730**, full course (7,926 m) | none (5 votes at most) |
+| i-019 | **31,730**, full course (7,926 m) | none (3 votes at most) |
 | i-020 | **30,390**, full course (7,962 m) | collected at 3,555 m, survived |
 
 i-020 in detail:
