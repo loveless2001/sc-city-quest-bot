@@ -247,12 +247,17 @@ Pass options to the launcher or after `npm start --`:
 | `--chromium` | use Playwright's Chromium (first run `npx playwright install chromium`) |
 | `--age-authorized` | let the bot tick the 18+ confirmation |
 | `--capture` | save every analysed frame and per-frame timings (`timing.jsonl`) |
+| `--crash-frames-ms=N` | keep the last N ms of frames for crash frames (default 4000; 0 turns them off) |
 | `--no-warmup` | skip the 1.5 s launch warm-up |
 | `--sequential-text` | use the original early-game page-text read |
 | `--endgame-boxes=avoid` | steer around endgame mystery boxes instead of collecting them |
 
 - **Endgame controller off:** remove `--endgame-v3` from
   `src/interactive-settings.json`.
+- **`--capture` recordings before 2026-10-22:** in their `timing.jsonl`,
+  each line written after the endgame takeover has the number of the frame
+  before its own. Its frame is `frame-<f+1>.jpg`, and the takeover's number
+  appears twice. Recordings made since pair each line with its own frame.
 - **Environment variables:**
   - `SC_BOT_OUTPUT` chooses where session logs go;
   - `SC_BOT_BROWSER_PROFILE` chooses the browser profile;
@@ -276,13 +281,43 @@ npm test
   - `results.jsonl`, marked interactive because a human may have helped;
   - result and solved-puzzle screenshots;
   - for runs that reach the endgame, `endgame-<time>.json` with clock samples,
-    hand-offs, keys and per-frame decisions.
+    hand-offs, keys and per-frame decisions;
+  - for a run that ends early, `crash-<time>/` with its last frames (below).
+- **Crash frames:** without `--capture`, the bot keeps the last 4 s of
+  analysed frames in memory (80–100 frames, 6–8 MB). When a run ends early,
+  they go to `crash-<time>/` in the session folder. A full-course game writes
+  nothing.
+  - **Ended early:** the furthest distance the bot's clock reached in the run
+    is short of 8,540 m, the end of the second sliding range. Full-course
+    games run on to about 9,000 m, where the course closes. A run that ends
+    before the clock starts (500 m) counts as early.
+  - **When it's checked:** at the result screen, or when the endgame loses the
+    game screen for 3 s.
+  - **What writes nothing:** a run you leave yourself (reloading, closing the
+    browser), and a game whose end the bot didn't see (bot off before the
+    endgame).
+  - **What the folder holds:**
+    - `frame-<n>.jpg`, numbered as `--capture` numbers them;
+    - their lines of `timing.jsonl`;
+    - a copy of the run's `endgame-<time>.json`;
+    - `crash.json`: the furthest and last distances, and the frame 1 s before
+      the last one. The game shows its result 1 s after a fatal hit, so the
+      hit is near that frame.
+  - **Replays:** the folder is a run folder for the endgame replay tools in
+    `claude-sc-city-quest/analysis/` (`endgame-replay.mjs`,
+    `slider-check.mjs`). They pair frames with endgame records by capture time
+    (`at - age` in `timing.jsonl`).
+  - **Cost:** about 0.5 µs per frame. Writing a folder takes about 50 ms,
+    after the result screen.
+  - **Options:** `--crash-frames-ms=N` keeps N ms of frames (0 turns this
+    off). `--capture` saves every frame instead and writes no crash folders.
 - **Clearing old logs:** see [Clearing old logs](#clearing-old-logs).
 
 ## Clearing old logs
 
-Each session leaves a folder of a few MB in `work/` (far more with
-`--capture`), and the bot's browser profile collects caches. To clear them:
+Each session leaves a folder of a few MB in `work/` (6–8 MB more for each
+game that ends early, far more with `--capture`), and the bot's browser
+profile collects caches. To clear them:
 
 1. Double-click **`Clear Old Logs.cmd`** in the bot's folder (or run
    `npm run clean`).
@@ -319,7 +354,7 @@ restore it from there.
 
 ## How it was checked
 
-**Unit tests** (`npm test`, 50 pass), covering:
+**Unit tests** (`npm test`, 57 pass), covering:
 
 - key cancellation on stop;
 - the stage clock and its loss;
@@ -332,10 +367,23 @@ restore it from there.
 - mystery boxes (on both courses);
 - cone-only jumps;
 - the handover obstacles, follow and takeover distances, and letter rows;
-- which course each live game bundle plays, and the version guard.
+- which course each live game bundle plays, and the version guard;
+- the crash frames' buffer and early-end rule.
 
 The log cleaner was checked on fake work folders (Recycle Bin moves, sessions
 in use, paths too long for the bin) and with a dry run on a real one.
+
+The crash frames were checked offline:
+
+- **Real bot loop:** run on i-036's recorded frames on the local replay page
+  of `tools/text-read-bench.mjs`, without `--capture`. A run ending in the
+  early game and one ending in the endgame each left one folder. Every
+  timing line had its frame, and in the endgame every line matched an
+  endgame record.
+- **Replay tools:** a crash folder cut from i-036 at 4,431 m reads in the
+  endgame replay and slider-check tools.
+- **Cost:** measured on i-036's 5,047 frames (75 KB each): 0.5 µs per frame
+  on average, under 4 µs at the 99th percentile.
 
 **Live interactive games** (Chrome unless noted, bot on throughout unless
 noted, 2026-10-16, all on the course before the 2026-10-17 update):
@@ -388,6 +436,7 @@ src/                       the bot (flat: modules, models, settings)
   manual-handoff.mjs       lane reacquisition when you hand back in the early game
   interruptible-scheduler.mjs  cancellable multi-key inputs
   page-text.mjs            early-game page-text read that a slow page does not hold up
+  crash-frames.mjs         the last seconds of frames, written when a run ends early
   medals.mjs               location medals (gold, blue, green) for the early-game controller
   endgame-session.mjs      endgame clock, following/steering, hand-back, timed keys, logs
   endgame-v3-course.mjs    course model: both known courses, speed law, row timetable

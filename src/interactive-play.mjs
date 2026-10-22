@@ -14,6 +14,7 @@ import {EndgameSession,SettledLane,instrumentEndgame,FINAL_STAGE,TAKEOVER_Z} fro
 import {LANE_X} from './endgame-v3-course.mjs';
 import {warmUp} from './warmup.mjs';
 import {OverlappedText,playingText} from './page-text.mjs';
+import {CrashFrames} from './crash-frames.mjs';
 
 const require=createRequire(process.env.SC_BOT_DEPENDENCIES?resolve(process.env.SC_BOT_DEPENDENCIES,'package.json'):import.meta.url);
 const {chromium}=require('playwright'),sharp=require('sharp');
@@ -195,6 +196,20 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     const out={};for(const k of ['dt','text','read','wait','decode','analyse','age']){const v=timing.map(t=>t[k]).filter(x=>x!=null).sort((a,b)=>a-b);
     if(v.length)out[k]=[v[v.length>>1],v[Math.floor(v.length*.9)],v.at(-1)].map(x=>Math.round(x));}
     const stale=timing.filter(t=>t.stale).length;if(stale)out.stale=stale;timing=[];return out;};
+  // Without --capture, the frames and timing lines of the last few seconds
+  // (--crash-frames-ms, default 4000; 0 turns this off) stay in memory, and a
+  // run that ends early leaves them in a crash-<time>/ folder (crash-frames.mjs).
+  const crashMs=Number(argv.find(a=>a.startsWith('--crash-frames-ms='))?.split('=')[1]??4000);
+  const crash=!flags.has('--capture')&&crashMs>0?new CrashFrames({output,windowMs:crashMs}):null;
+  const keepFrame=(line,image)=>crash?.push({f:line.f,shot:image.shot,line,at:image.captureStart,z:endgame?.zAt(image.captureStart),game:endgame?.gameStamp});
+  // A run has ended (seen at time at): after its endgame log is saved, before
+  // endgame.newGame().
+  async function runEnded(reason,at=Date.now()){
+    if(!crash)return;
+    const endgameFile=endgame?.saved?resolve(output,`endgame-${endgame.gameStamp}.json`):null;
+    try{const dir=await crash.end({reason,now:at,endgameFile});if(dir)console.log(JSON.stringify({crashFrames:dir}));}
+    catch(error){await appendFile(resolve(output,'errors.log'),`${new Date().toISOString()} crash frames: ${error.stack||error}\n`).catch(()=>{});}
+  }
   // Until the last random obstacles are passed, the early-game controller's
   // obstacle tracks go to the endgame planner (see junctionPilot). Its lane
   // prior comes from the endgame's lane model (its own lanes are -1..1, with
@@ -232,7 +247,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       else{endgameText=read.text;await endgame.ingest(read.log);}
     }
     const text=endgameText;endgameFrames++;
-    const leave=async reason=>{await endgame.save(reason);endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;puzzleClosingUntil=0;junctionPilot=null;};
+    const leave=async reason=>{await endgame.save(reason);await runEnded(reason,hudMissingSince??Date.now());endgame.newGame();endgameText=null;endgamePuzzle=false;hudMissingSince=null;puzzleClosingUntil=0;junctionPilot=null;};
     if(text.includes('NEXT QUEST')){
       await recordResult(text);await leave('result');
       if(enabled)control.setEnabled(false,'Run ended · start a new game');return;
@@ -273,14 +288,17 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     const junctionMs=junctionStep(image,stage,now);
     const s0=Date.now(),record=await endgame.step(image.frame,{captureMs:image.captureStart,stage});
     record.timing={probe:probeMs,wait:image.waitMs,decode:image.decodeMs,step:Date.now()-s0,since:tick-(endgame.lastTick??tick),...(junctionMs?{junction:junctionMs}:{})};endgame.lastTick=tick;
-    timing.push({f:frames,at:now,stage,dt:record.timing.since,text:probeMs,wait:image.waitMs,decode:image.decodeMs,analyse:record.timing.step,age:now-image.captureStart});
+    // f is this frame's number, as its --capture file is named (until
+    // 2026-10-22 an endgame line had the number of the frame before).
+    frames++;
+    const line={f:frames,at:now,stage,dt:record.timing.since,text:probeMs,wait:image.waitMs,decode:image.decodeMs,analyse:record.timing.step,age:now-image.captureStart};
+    timing.push(line);keepFrame(line,image);
     if(regain){
       // Control comes back: keep following until the runner is seen settled in a lane.
       const lane=settled.observe(endgame.ctl.lastMeasured,image.captureStart,image.frame);
       if(lane===null)control.status('Finding runner…');
       else{endgame.drive(Date.now(),lane,token);control.status('Bot running · F8 takes over');}
     }
-    frames++;
     if(flags.has('--capture'))await saveFrame(image.shot);
     if(Date.now()-lastReport>5000){
       lastReport=Date.now();const progress={frames,score:Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',','')),stage,z:record.zFrame,endgame:record.mode,enabled:control.enabled,timing:timingSummary()};
@@ -338,7 +356,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
         const text=read.text,textMs=Date.now()-tick;if(!live(token))continue;
         if(text===null){await sleep(100);continue;}
         if(text.includes('NEXT QUEST')){
-          await recordResult(text);if(endgame){await endgame.save('result');endgame.newGame();}
+          await recordResult(text);await endgame?.save('result');await runEnded('result');endgame?.newGame();
           control.setEnabled(false,'Run ended · start a new game');continue;
         }
         if(/GHÉP HÌNH|THỬ THÁCH BẤT NGỜ/.test(text)){
@@ -412,8 +430,9 @@ export async function runInteractive({context,page,argv,output,url='https://scci
           await endgame.step(image.frame,{captureMs:image.captureStart,stage});followMs=Date.now()-f0;}
         frames++;
         if(flags.has('--capture'))await saveFrame(image.shot);
-        timing.push({f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,jump:decision.keys?.includes('ArrowUp')?1:undefined,score:hudScore(text),pen:penaltyShown(text),pop:popupsShown(text),
-          wait:image.waitMs,decode:image.decodeMs,analyse:analysisMs,follow:followMs,age:now-image.captureStart});lastTick=tick;
+        const line={f:frames,at:now,stage,dt:tick-(lastTick??tick),text:textMs,read:read.readMs,stale:read.stale||undefined,textAge:read.ageMs,jump:decision.keys?.includes('ArrowUp')?1:undefined,score:hudScore(text),pen:penaltyShown(text),pop:popupsShown(text),
+          wait:image.waitMs,decode:image.decodeMs,analyse:analysisMs,follow:followMs,age:now-image.captureStart};
+        timing.push(line);keepFrame(line,image);lastTick=tick;
         if(Date.now()-lastReport>5000){
           lastReport=Date.now();const progress={frames,score:Number(text.match(/Điểm số\s*([\d,]+)/)?.[1]?.replaceAll(',','')),stage,analysisMs,enabled:control.enabled,timing:timingSummary()};
           await writeFile(resolve(output,'progress.json'),JSON.stringify(progress,null,2));console.log(JSON.stringify(progress));
