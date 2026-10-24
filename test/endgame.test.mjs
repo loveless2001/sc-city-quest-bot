@@ -249,7 +249,7 @@ test('a key in flight when the run ends does not crash the session',async()=>{
 });
 
 test('each live bundle maps to its course, and the guard expects a known one',()=>{
-  for(const bundle of ['index-BFqScKec.js','index-CE9I5eWz.js','index-B8HeQgVv.js'])assert.equal(courseOfBundle(bundle),'BFqScKec',bundle);
+  for(const bundle of ['index-BFqScKec.js','index-CE9I5eWz.js','index-B8HeQgVv.js','index-BG06rE0x.js'])assert.equal(courseOfBundle(bundle),'BFqScKec',bundle);
   assert.equal(courseOfBundle('index-DnBWvl2N.js'),'DnBWvl2N');assert.equal(courseOfBundle('index-unknown.js'),undefined);
   const {args}=JSON.parse(readFileSync(new URL('../src/interactive-settings.json',import.meta.url),'utf8'));
   const expected=args.find(a=>a.startsWith('--expected-bundle='))?.split('=')[1];

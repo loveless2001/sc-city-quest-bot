@@ -126,6 +126,9 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     }finally{if(mouseOwned){mouseOwned=false;await page.mouse.up();}}
   }
   async function setupStep(token){
+    // The 18+ confirmation, shown until index-B8HeQgVv.js; index-BG06rE0x.js
+    // dropped it (its only other 'Xác nhận' is phone verification, not on the
+    // Guest path).
     if(await button('Xác nhận').isVisible().catch(()=>false)){
       if(!flags.has('--age-authorized')){control.status('Confirm your age in the game');return;}
       const checked=await tap(page.getByText('Tôi đã đủ 18 tuổi trước khi bắt đầu chơi game.',{exact:true}),token);
