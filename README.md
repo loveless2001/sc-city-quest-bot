@@ -13,8 +13,11 @@ normal browser window that you can take over at any time with **F8**.
 
 The distances are those of the current course (game bundle
 `index-BFqScKec.js`, 2026-10-17); see [Course](#course). The live bundle
-`index-BG06rE0x.js` (2026-10-24) plays the same course. It dropped the 18+
-confirmation and adds traffic-source analytics
+`index-DS2du1bN.js` (2026-10-26) plays the same course. It lets the site
+switch guest play off, and on 2026-10-27 guest play was off, so the bot could
+not start a game ([docs/game-update-DS2du1bN.md](docs/game-update-DS2du1bN.md)).
+`index-BG06rE0x.js` (2026-10-24) dropped the 18+ confirmation and added
+traffic-source analytics
 ([docs/game-update-BG06rE0x.md](docs/game-update-BG06rE0x.md)). Since
 `index-B8HeQgVv.js` (2026-10-20) the health warning stays at the bottom left
 of the screen, which the bot tolerates
@@ -35,7 +38,10 @@ has changed the bot stays disabled until its rules have been reviewed.
 2. Click inside the game window, then press **F8** (on some laptops
    **Fn+F8**), or click the Start/Stop button at bottom right. At the menu the
    bot picks Guest and Hanoi itself. Alternatively, start a Guest game in Hanoi
-   yourself (blue runner, default window size) and press F8.
+   yourself (blue runner, default window size) and press F8. If the site has
+   switched guest play off, the login screen shows only the Facebook button
+   and the bot shows **Guest play is off on the site**. It never logs in, so
+   it waits.
 3. The current game asks no 18+ question. Game versions before 2026-10-24
    did: confirm it yourself, or launch with `--age-authorized` to let the bot
    tick it.

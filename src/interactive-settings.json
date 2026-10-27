@@ -58,7 +58,7 @@
     "--far-pickups",
     "--public-word-clock",
     "--current-game-rewards",
-    "--expected-bundle=index-BG06rE0x.js",
+    "--expected-bundle=index-DS2du1bN.js",
     "--hazard-only-early-jumps",
     "--jump-cones-only",
     "--endgame-v3",
@@ -66,6 +66,6 @@
   ],
   "endgame": "claude-sc-city-quest endgame-v3 (live c-037..c-066, 30/30 survived); boundary fix 2026-10-16",
   "jumps": "Early-game jumps only for a tracked cone the route cannot avoid (--hazard-only-early-jumps --jump-cones-only), 2026-10-17; trial 427 jumped about once a second.",
-  "course": "Game bundle index-BG06rE0x.js (found 2026-10-25): same course as index-BFqScKec.js; the 18+ confirmation is gone and guest events carry a traffic source (docs/game-update-BG06rE0x.md). Since index-B8HeQgVv.js (2026-10-20) the health warning stays at the bottom left (docs/game-update-B8HeQgVv.md). Guest button renamed with index-CE9I5eWz.js (docs/game-update-CE9I5eWz.md). Course from 2026-10-17: lengthened; see docs/game-update-BFqScKec.md. Letters valued 720 (4x) for the new letter points.",
+  "course": "Game bundle index-DS2du1bN.js (found 2026-10-27): same course as index-BFqScKec.js; the site can now switch guest play off (docs/game-update-DS2du1bN.md). Since index-BG06rE0x.js (2026-10-24) the 18+ confirmation is gone and guest events carry a traffic source (docs/game-update-BG06rE0x.md). Since index-B8HeQgVv.js (2026-10-20) the health warning stays at the bottom left (docs/game-update-B8HeQgVv.md). Guest button renamed with index-CE9I5eWz.js (docs/game-update-CE9I5eWz.md). Course from 2026-10-17: lengthened; see docs/game-update-BFqScKec.md. Letters valued 720 (4x) for the new letter points.",
   "pickups": "Location medals of all three colours (--location-medals, medals.mjs) and navy coins from the final-stage coin detector (--navy-coins) as early-game pickups, 2026-10-17."
 }

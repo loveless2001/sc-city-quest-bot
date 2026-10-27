@@ -125,6 +125,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       for(let step=1;step<=8&&live(token);step++)await page.mouse.move(x+(toX-x)*step/8,y+(toY-y)*step/8);
     }finally{if(mouseOwned){mouseOwned=false;await page.mouse.up();}}
   }
+  let noGuestSince=null;
   async function setupStep(token){
     // The 18+ confirmation, shown until index-B8HeQgVv.js; index-BG06rE0x.js
     // dropped it (its only other 'Xác nhận' is phone verification, not on the
@@ -136,8 +137,15 @@ export async function runInteractive({context,page,argv,output,url='https://scci
     }
     // Guest button: 'Chơi ngay (Guest)' until index-BFqScKec.js, 'Chơi thử' since index-CE9I5eWz.js.
     for(const name of ['Bắt đầu chạy','VN Hà Nội','Chơi','Chơi thử','Chơi ngay (Guest)']){
-      if(await tap(button(name),token)){control.status('Starting Guest game…');return;}
+      if(await tap(button(name),token)){noGuestSince=null;control.status('Starting Guest game…');return;}
     }
+    // Since index-DS2du1bN.js the site can switch guest play off: the login
+    // screen then shows the Facebook button without 'Chơi thử' (it also lacks
+    // it for a moment while the site's settings load). The bot plays as Guest only.
+    if(await button('Đăng nhập bằng Facebook').isVisible().catch(()=>false)){
+      noGuestSince??=Date.now();
+      if(Date.now()-noGuestSince>3000){control.status('Guest play is off on the site');return;}
+    }else noGuestSince=null;
     control.status('Waiting for Hanoi track');
   }
   // The game's page can be unresponsive for seconds while it loads; a text read
