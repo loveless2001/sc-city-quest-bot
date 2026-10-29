@@ -13,9 +13,13 @@ normal browser window that you can take over at any time with **F8**.
 
 The distances are those of the current course (game bundle
 `index-BFqScKec.js`, 2026-10-17); see [Course](#course). The live bundle
-`index-DS2du1bN.js` (2026-10-26) plays the same course. It lets the site
-switch guest play off, and on 2026-10-27 guest play was off, so the bot could
-not start a game ([docs/game-update-DS2du1bN.md](docs/game-update-DS2du1bN.md)).
+`index-omdIpeof.js` (2026-10-28) plays the same course. It adds a cookie
+notice that covers the road at the runner's feet until you accept it; the bot
+stays off while it shows
+([docs/game-update-omdIpeof.md](docs/game-update-omdIpeof.md)).
+`index-DS2du1bN.js` (2026-10-26) lets the site switch guest play off; it was
+off on 2026-10-27 and back on by 2026-10-29
+([docs/game-update-DS2du1bN.md](docs/game-update-DS2du1bN.md)).
 `index-BG06rE0x.js` (2026-10-24) dropped the 18+ confirmation and added
 traffic-source analytics
 ([docs/game-update-BG06rE0x.md](docs/game-update-BG06rE0x.md)). Since
@@ -42,9 +46,13 @@ has changed the bot stays disabled until its rules have been reviewed.
    switched guest play off, the login screen shows only the Facebook button
    and the bot shows **Guest play is off on the site**. It never logs in, so
    it waits.
-3. The current game asks no 18+ question. Game versions before 2026-10-24
-   did: confirm it yourself, or launch with `--age-authorized` to let the bot
-   tick it.
+3. **Cookie notice:** the first time, the game shows a cookie notice at the
+   bottom with an **Đồng ý** button. Click it once yourself; the game
+   remembers it. While it shows, the bot turns itself off with **Accept the
+   cookie notice (Đồng ý), then press F8**, because the notice covers the
+   road the bot reads the runner's position from. The current game asks no
+   18+ question. Game versions before 2026-10-24 did: confirm it yourself, or
+   launch with `--age-authorized` to let the bot tick it.
 4. Keep the game window in front and focused during a run. The game's own
    code makes the runner fall when its window loses focus or its tab is
    hidden, whether or not the bot is playing. Windows also counts a fully
@@ -418,6 +426,7 @@ On the current course (2026-10-17, bundle `index-BFqScKec.js`):
 | i-032 (bundle `index-B8HeQgVv.js`) | 27,560, full course; calm takeover at 4,287 m; 11 letters, 3 words, all three medals |
 | i-033 (bundle `index-B8HeQgVv.js`) | 28,740, full course; forced takeover at 4,301 m; 9 letters, 3 words, all three medals |
 | i-037 (bundle `index-BG06rE0x.js`) | 29,520, full course; calm takeover at 4,290 m; 10 letters, 3 words, all three medals; no age step |
+| i-038 (bundle `index-omdIpeof.js`) | 31,870, full course; calm takeover at 4,301 m; endgame box collected at 4,355 m; 12 letters, 3 words, all three medals |
 
 The new course gives fewer endgame coins and more letter points. See
 [docs/game-update-BFqScKec.md](docs/game-update-BFqScKec.md).

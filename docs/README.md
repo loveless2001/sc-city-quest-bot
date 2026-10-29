@@ -10,6 +10,7 @@
 | [game-update-B8HeQgVv.md](game-update-B8HeQgVv.md) | review of the 2026-10-20 game update (health warning kept on screen, measured against recorded games; gameplay unchanged) |
 | [game-update-BG06rE0x.md](game-update-BG06rE0x.md) | review of the 2026-10-24 game update (18+ confirmation removed, traffic-source analytics; gameplay unchanged) |
 | [game-update-DS2du1bN.md](game-update-DS2du1bN.md) | review of the 2026-10-26 game update (site switch for guest play, off on 2026-10-27; analytics events; gameplay unchanged) |
+| [game-update-omdIpeof.md](game-update-omdIpeof.md) | review of the 2026-10-28 game update (cookie notice over the runner's lane lines until accepted, measured on a recorded game; minors' sign-up; gameplay unchanged) |
 | [chatgpt-control-verification.json](chatgpt-control-verification.json) | ChatGPT's own checks of the takeover controls (2026-10-15) |
 
 ## Where the code came from

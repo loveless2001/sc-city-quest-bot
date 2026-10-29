@@ -7,8 +7,9 @@
 //     random obstacles (no breather), course end at 11040 m. index-CE9I5eWz.js
 //     (2026-10-19) plays the same course (menu and sign-up changes only), and
 //     so do index-B8HeQgVv.js (2026-10-20: the health warning stays on screen),
-//     index-BG06rE0x.js (found 2026-10-25: no 18+ confirmation, analytics) and
-//     index-DS2du1bN.js (found 2026-10-27: server switch for guest play).
+//     index-BG06rE0x.js (found 2026-10-25: no 18+ confirmation, analytics),
+//     index-DS2du1bN.js (found 2026-10-27: server switch for guest play) and
+//     index-omdIpeof.js (found 2026-10-29: cookie notice, minors' sign-up).
 //   DnBWvl2N (index-kcDsL1AL.js and index-DnBWvl2N.js, until 2026-10-17): the
 //     course of all runs recorded before; kept for replaying them.
 // The constants below are live bindings: useCourse()/withCourse() switch them.
@@ -19,7 +20,7 @@ export const FENCE_HALF_X=1.614,FENCE_HALF_Z=0.5;
 const BASE_SPEED=20,ACCEL=0.12,MAX_SPEED=50;
 
 export const COURSES={
-  BFqScKec:{bundle:'index-BFqScKec.js',sameCourse:['index-CE9I5eWz.js','index-B8HeQgVv.js','index-BG06rE0x.js','index-DS2du1bN.js'],
+  BFqScKec:{bundle:'index-BFqScKec.js',sameCourse:['index-CE9I5eWz.js','index-B8HeQgVv.js','index-BG06rE0x.js','index-DS2du1bN.js','index-omdIpeof.js'],
     stages:[['Nhập cuộc',0,25],['Tăng tốc 1',500,28],['Tăng tốc 2',1280,31],['Tăng tốc 3',3060,34],['Về đích',3840,37],['Bứt phá',4140,50]],
     finalRampEnd:4540,patternStart:4340,laneStart:4340,laneEnd:4840,sparseEnd:5340,denseFull:5640,
     tightenStart:7040,tightenEnd:9040,forceEnd:11040,moving:[[4340,5040],[8040,8540]],

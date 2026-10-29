@@ -28,6 +28,13 @@ const penaltyShown=text=>Number(text.match(/(?:^|\n)\s*-(30|60)\s*(?:\n|$)/)?.[1
 // badges and boxes +200), and a completed word's "PHRASE!" banner.
 const popupsShown=text=>{const p=[...text.matchAll(/(?:^|\n)[ \t]*([+-]\d{2,4})[ \t]*(?=\n|$)/g)].map(m=>m[1]);
   const w=text.match(/(?:^|\n)[ \t]*([A-Z][A-Z ]{3,}!)[ \t]*(?=\n|$)/)?.[1];return p.length||w?[...p,...(w?[w]:[])]:undefined;};
+// Since index-omdIpeof.js a cookie notice shows on every screen until the
+// player accepts it ('Đồng ý'; remembered by the page). In a run it covers the
+// road at the runner's feet (x 193-553, rows 575-638): with it, the lane-line
+// reading was lost or more than 1 m off on 5% of a recorded endgame's frames.
+// The bot doesn't accept it; it turns itself off while the notice shows.
+const cookieNoticeShown=text=>text.includes('Trò chơi sử dụng cookie');
+const COOKIE_NOTICE='Accept the cookie notice (Đồng ý), then press F8';
 
 export async function runInteractive({context,page,argv,output,url='https://sccityquest.zenimpact.vn/'}={}){
   await mkdir(output,{recursive:true});
@@ -263,6 +270,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
       await recordResult(text);await leave('result');
       if(enabled)control.setEnabled(false,'Run ended · start a new game');return;
     }
+    if(enabled&&cookieNoticeShown(text)){control.setEnabled(false,COOKIE_NOTICE);return;}
     const puzzleText=/GHÉP HÌNH|THỬ THÁCH BẤT NGỜ/.test(text);
     // After the continue click the puzzle window fades out for a few hundred ms
     // with its text still on the page, while the game already runs (live game
@@ -370,6 +378,7 @@ export async function runInteractive({context,page,argv,output,url='https://scci
           await recordResult(text);await endgame?.save('result');await runEnded('result');endgame?.newGame();
           control.setEnabled(false,'Run ended · start a new game');continue;
         }
+        if(cookieNoticeShown(text)){control.setEnabled(false,COOKIE_NOTICE);continue;}
         if(/GHÉP HÌNH|THỬ THÁCH BẤT NGỜ/.test(text)){
           await reset();if(live(token))await puzzleStep(token);await sleep(70);continue;
         }
